@@ -1,0 +1,17 @@
+{
+  "required": true,
+  "minVersion": "0.8",
+  "package": "cc.barnab.smoothmaps.mixin.client",
+  "compatibilityLevel": "JAVA_21",
+  "client": [
+    "PaintingRendererMixin",
+    "map.ItemFrameRendererMixin",
+    "map.MapRendererMixin",
+    "map.MapRenderStateMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  },
+  "mixins": [
+  ]
+}

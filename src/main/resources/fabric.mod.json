@@ -1,0 +1,43 @@
+{
+  "schemaVersion": 1,
+  "id": "smoothmaps",
+  "version": "${version}",
+
+  "name": "SmoothMaps",
+  "description": "Provides smooth lighting for framed maps and paintings.",
+  "authors": ["Barnaby"],
+  "contributors": ["Toby (the cat)"],
+  "contact": {
+    "sources": "https://github.com/barnabwhy/SmoothMaps",
+    "issues": "https://github.com/barnabwhy/SmoothMaps/issues"
+  },
+
+  "license": "MIT",
+  "icon": "assets/smoothmaps/icon.png",
+
+  "environment": "client",
+  "entrypoints": {
+    "client": ["cc.barnab.smoothmaps.client.SmoothMapsClient"],
+    "main": ["cc.barnab.smoothmaps.SmoothMaps"]
+  },
+
+  "mixins": [
+    "smoothmaps.mixins.json"
+    ,{
+      "config": "smoothmaps.client.mixins.json",
+      "environment": "client"
+    }
+  ],
+  "custom": {
+    "loom:injected_interfaces": {
+      "net/minecraft/class_10090": ["cc/barnab/smoothmaps/client/MapRenderStateAccessor"]
+    }
+  },
+
+  "accessWidener": "smoothmaps.accesswidener",
+
+  "depends": {
+    "fabricloader": ">=${loader_version}",
+    "minecraft": "${minecraft_version}"
+  }
+}
