@@ -4,7 +4,7 @@
   "version": "${version}",
 
   "name": "SmoothMaps",
-  "description": "Provides smooth lighting for framed maps and paintings.",
+  "description": "Provides smooth lighting for framed maps, paintings and rails.",
   "authors": ["Barnaby"],
   "contributors": ["Toby (the cat)"],
   "contact": {
