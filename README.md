@@ -1,5 +1,5 @@
 # SmoothMaps
-A Minecraft mod to provide smooth lighting for framed maps and paintings.
+A Minecraft mod to provide smooth lighting for framed maps, paintings and rails.
 
 Respects your smooth lighting setting and doesn't cause a big performance hit.
 
