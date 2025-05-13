@@ -30,7 +30,9 @@
   ],
   "custom": {
     "loom:injected_interfaces": {
-      "net/minecraft/class_10090": ["cc/barnab/smoothmaps/client/MapRenderStateAccessor"]
+      "net/minecraft/class_10090": ["cc/barnab/smoothmaps/client/MapRenderStateAccessor"],
+      "net/minecraft/class_765": ["cc/barnab/smoothmaps/client/LightUpdateAccessor"],
+      "net/minecraft/class_757": ["cc/barnab/smoothmaps/client/GameRenderTimeGetter"]
     }
   },
 

@@ -1,20 +1,25 @@
 package cc.barnab.smoothmaps.mixin.client.map;
 
-import cc.barnab.smoothmaps.client.MapRenderStateAccessor;
+import cc.barnab.smoothmaps.client.GameRenderTimeGetter;
+import cc.barnab.smoothmaps.client.LightUpdateAccessor;
+import cc.barnab.smoothmaps.client.MathUtil;
 import com.llamalad7.mixinextras.sugar.Local;
 import com.llamalad7.mixinextras.sugar.Share;
 import com.llamalad7.mixinextras.sugar.ref.LocalIntRef;
-import com.llamalad7.mixinextras.sugar.ref.LocalRef;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexConsumer;
+import net.minecraft.client.Camera;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.renderer.GameRenderer;
 import net.minecraft.client.renderer.MapRenderer;
 import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.client.renderer.state.MapRenderState;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
+import net.minecraft.core.Vec3i;
 import net.minecraft.world.level.lighting.LevelLightEngine;
 import org.joml.Matrix4f;
+import org.joml.Vector3f;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
@@ -23,88 +28,182 @@ import org.spongepowered.asm.mixin.injection.Redirect;
 import org.spongepowered.asm.mixin.injection.Slice;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
-import java.util.HashMap;
-
 @Mixin(MapRenderer.class)
 public class MapRendererMixin {
+    @Unique
+    boolean shouldReuseVertexLights = false;
+    @Unique
+    int[] vertexLights = new int[4];
+
+    @Unique
+    long lastUpdatedLights = -1L;
+    @Unique
+    byte vertNum = 0;
+    @Unique
+    BlockPos lastBlockPos = null;
+
+    @Unique
+    private final static int[][] vertexRotationMap = new int[][]{
+            {2, 0, 3, 1},
+            {3, 2, 1, 0},
+            {1, 3, 0, 2}
+    };
+
+    @Unique
+    int[][][] lightLevels = new int[3][3][3];
+
+    @Unique
+    boolean shouldSmoothLight = false;
+
+    @Unique
+    private boolean shouldSmoothLight(boolean isInFrame, MapRenderState mapRenderState) {
+        if (!isInFrame)
+            return false;
+
+        if (mapRenderState.isGlowing())
+            return false;
+
+        if (!Minecraft.useAmbientOcclusion())
+            return false;
+
+        // Optimisations to disable smooth lighting in situations you wouldn't see it
+        GameRenderer gameRenderer = Minecraft.getInstance().gameRenderer;
+        Camera mainCamera = gameRenderer.getMainCamera();
+        Vector3f camLook = mainCamera.getLookVector();
+
+        // Is camera behind frame
+        Direction.Axis axis = mapRenderState.direction().getAxis();
+        Direction.AxisDirection axisDir = mapRenderState.direction().getAxisDirection();
+        boolean isCamBehind = switch (axis) {
+            case X -> (mapRenderState.getBlockPos().getX() - mainCamera.getPosition().x) * axisDir.getStep() > 1f;
+            case Y -> (mapRenderState.getBlockPos().getY() - mainCamera.getPosition().y) * axisDir.getStep() > 1f;
+            case Z -> (mapRenderState.getBlockPos().getZ() - mainCamera.getPosition().z) * axisDir.getStep() > 1f;
+        };
+
+        if (isCamBehind)
+            return false;
+
+        // Is camera >128 blocks from frame
+        float distSqr = (float) mapRenderState.getBlockPos().distSqr(mainCamera.getBlockPosition());
+        if (distSqr > 128f * 128f)
+            return false;
+
+        // Is camera facing away from frame
+        float clampedFovModifier = Math.max(Math.max(gameRenderer.fovModifier, gameRenderer.oldFovModifier), 1f);
+        float fovVert = (float) Math.toRadians((float)Minecraft.getInstance().options.fov().get() * clampedFovModifier);
+        float fovHoriz = fovVert * (float)Minecraft.getInstance().getWindow().getWidth() / (float)Minecraft.getInstance().getWindow().getHeight();
+        if (mapRenderState.direction().step().angle(camLook) < Math.PI - fovHoriz)
+            return false;
+
+        return true;
+    }
+
     @Inject(method = "render", at = @At("HEAD"))
     private void render(
             MapRenderState mapRenderState, PoseStack poseStack, MultiBufferSource multiBufferSource, boolean bl, int i,
             CallbackInfo ci,
-            @Share("originalLight") LocalIntRef originalLight,
-            @Share("lightLevels") LocalRef<HashMap<BlockPos, Integer>> blockLights
+            @Share("originalLight") LocalIntRef originalLight
     ) {
         // Don't smooth light held maps or glow frames
-        if (!bl || ((MapRenderStateAccessor) mapRenderState).isGlowing() || !Minecraft.useAmbientOcclusion())
+        shouldSmoothLight = shouldSmoothLight(bl, mapRenderState);
+        if (!shouldSmoothLight)
             return;
+
+        vertNum = 0;
+        BlockPos blockPos = mapRenderState.getBlockPos();
 
         originalLight.set(i);
 
-        // Get light levels for surrounding blocks
+        // Check if we can reuse vertex lights
         assert Minecraft.getInstance().level != null;
         LevelLightEngine lightEngine = Minecraft.getInstance().level.getLightEngine();
 
-        HashMap<BlockPos, Integer> lightLevels = new HashMap<>();
+        if (((LightUpdateAccessor)lightEngine).getLastUpdated() <= lastUpdatedLights && blockPos.equals(lastBlockPos)) {
+            shouldReuseVertexLights = true;
+            return;
+        }
 
+        shouldReuseVertexLights = false;
+        lastUpdatedLights = Minecraft.getInstance().gameRenderer.getLastRenderTime();
+        lastBlockPos = blockPos;
+
+        // Get light levels for surrounding blocks
         for (int x = -1; x <= 1; x++) {
             for (int y = -1; y <= 1; y++) {
                 for (int z = -1; z <= 1; z++) {
-                    BlockPos pos = ((MapRenderStateAccessor) mapRenderState).getBlockPos().offset(x, y, z);
+                    if (x == 0 && y == 0 && z == 0) {
+                        lightLevels[x+1][y+1][z+1] = i;
+                        continue;
+                    }
+
+                    BlockPos pos = blockPos.offset(x, y, z);
 
                     int light = 0;
                     if (lightEngine.skyEngine != null) {
                         int skyLight = lightEngine.skyEngine.getLightValue(pos);
-                        light += ((skyLight * 16) & 0xFFFF) << 16;
+                        light += (skyLight * 16) << 16;
                     }
 
                     if (lightEngine.blockEngine != null) {
                         int blockLight = lightEngine.blockEngine.getLightValue(pos);
-                        light += (blockLight * 16) & 0xFFFF;
+                        light += blockLight * 16;
                     }
 
-                    lightLevels.put(pos, light);
+                    lightLevels[x+1][y+1][z+1] = light;
                 }
             }
         }
 
-        for (BlockPos pos : lightLevels.keySet()) {
-            int light = lightLevels.get(pos);
-            int skyLight = light >> 16;
-            int blockLight = light & 0xFFFF;
+        // Loop through all queried light levels
+        for (int x = -1; x <= 1; x++) {
+            for (int y = -1; y <= 1; y++) {
+                for (int z = -1; z <= 1; z++) {
+                    // Unpack light
+                    int light = lightLevels[x+1][y+1][z+1];
+                    int skyLight = light >> 16;
+                    int blockLight = light & 0xFFFF;
 
-            if (blockLight == 0 && skyLight == 0) {
-                int maxSky = 0;
-                int maxBlock = 0;
+                    // If were in a solid block
+                    if (blockLight == 0 && skyLight == 0) {
+                        int maxSky = 0;
+                        int maxBlock = 0;
 
-                for (int x = -1; x <= 1; x++) {
-                    for (int y = -1; y <= 1; y++) {
-                        for (int z = -1; z <= 1; z++) {
-                            BlockPos otherPos = pos.offset(x, y, z);
-                            if (lightLevels.containsKey(otherPos)) {
-                                int dist = Math.abs(x) + Math.abs(y) + Math.abs(z);
-                                int otherLight = lightLevels.get(otherPos);
+                        // Loop through 3x3 cube surrounding this block
+                        for (int x2 = x-1; x2 <= x+1; x2++) {
+                            for (int y2 = y-1; y2 <= y+1; y2++) {
+                                for (int z2 = z-1; z2 <= z+1; z2++) {
+                                    // If this block skip
+                                    if (x2 == x && y2 == y && z2 ==z)
+                                        continue;
 
-                                int otherSkyLight = otherLight >> 16;
-                                if (otherSkyLight - dist * 16 > maxSky)
-                                    maxSky = otherSkyLight - dist * 16;
+                                    // Check if the pos is in our original 3x3 bounds
+                                    if (x2 >= -1 && x2 <= 1 && y2 >= -1 && y2 <= 1 && z2 >= -1 && z2 <= 1) {
+                                        // Calculate taxicab distance
+                                        int dist = Math.abs(x2-x) + Math.abs(y2-y) + Math.abs(z2-z);
 
-                                int otherBlockLight = otherLight & 0xFFFF;
-                                if (otherBlockLight - dist * 16 > maxBlock)
-                                    maxBlock = otherBlockLight - dist * 16;
+                                        int otherLight = lightLevels[x2+1][y2+1][z2+1];
+
+                                        int otherSkyLight = otherLight >> 16;
+                                        if (otherSkyLight - dist * 16 > maxSky)
+                                            maxSky = otherSkyLight - dist * 16;
+
+                                        int otherBlockLight = otherLight & 0xFFFF;
+                                        if (otherBlockLight - dist * 16 > maxBlock)
+                                            maxBlock = otherBlockLight - dist * 16;
+                                    }
+                                }
                             }
                         }
+
+                        skyLight = maxSky;
+                        blockLight = maxBlock;
+
+                        light = (skyLight << 16) + blockLight;
+                        lightLevels[x+1][y+1][z+1] = light;
                     }
                 }
-
-                skyLight = maxSky;
-                blockLight = maxBlock;
-
-                light = ((skyLight & 0xFFFF) << 16) + blockLight & 0xFFFF;
-                lightLevels.put(pos, light);
             }
         }
-
-        blockLights.set(lightLevels);
     }
 
     @Redirect(
@@ -119,14 +218,11 @@ public class MapRendererMixin {
             VertexConsumer instance, Matrix4f matrix4f, float f, float g, float h,
             @Local(ordinal = 0, argsOnly = true) boolean bl,
             @Local(ordinal = 0, argsOnly = true) MapRenderState mapRenderState,
-            @Local(ordinal = 0, argsOnly = true) LocalIntRef light,
-            @Share("lightLevels") LocalRef<HashMap<BlockPos, Integer>> blockLights
+            @Local(ordinal = 0, argsOnly = true) LocalIntRef light
     ) {
         // Don't smooth light held maps or glow frames
-        if (bl && !((MapRenderStateAccessor) mapRenderState).isGlowing() && Minecraft.useAmbientOcclusion()) {
-            BlockPos pos = ((MapRenderStateAccessor) mapRenderState).getBlockPos();
-
-            float xInBlock = switch(((MapRenderStateAccessor) mapRenderState).rotation()) {
+        if (shouldSmoothLight) {
+            float xInBlock = switch(mapRenderState.rotation()) {
                 case 0, 4 -> f / 128.0f;
                 case 1, 5 -> 1.0f - g / 128.0f;
                 case 2, 6 -> 1.0f - f / 128.0f;
@@ -134,7 +230,7 @@ public class MapRendererMixin {
                 default -> 0.0f;
             };
 
-            float yInBlock = switch(((MapRenderStateAccessor) mapRenderState).rotation()) {
+            float yInBlock = switch(mapRenderState.rotation()) {
                 case 0, 4 -> g / 128.0f;
                 case 1, 5 -> f / 128.0f;
                 case 2, 6 -> 1.0f - g / 128.0f;
@@ -142,7 +238,22 @@ public class MapRendererMixin {
                 default -> 0.0f;
             };
 
-            light.set(getLight(pos, blockLights.get(), xInBlock, yInBlock, ((MapRenderStateAccessor) mapRenderState).direction()));
+            int rotatedVertNum = switch(mapRenderState.rotation()) {
+                default -> vertNum;
+                case 1, 5 -> vertexRotationMap[0][vertNum];
+                case 2, 6 -> vertexRotationMap[1][vertNum];
+                case 3, 7 -> vertexRotationMap[2][vertNum];
+            };
+
+            if (shouldReuseVertexLights) {
+                light.set(vertexLights[rotatedVertNum]);
+            } else {
+                int lightVal = getLight(lightLevels, xInBlock, yInBlock, mapRenderState.direction());
+                vertexLights[rotatedVertNum] = lightVal;
+                light.set(lightVal);
+            }
+
+            vertNum++;
         }
 
         return instance.addVertex(matrix4f, f, g, h);
@@ -159,65 +270,60 @@ public class MapRendererMixin {
             @Share("originalLight") LocalIntRef originalLight
     ) {
         // Don't smooth light held maps or glow frames
-        if (!bl || ((MapRenderStateAccessor) mapRenderState).isGlowing() || !Minecraft.useAmbientOcclusion())
+        if (!shouldSmoothLight)
             return;
 
         light.set(originalLight.get());
     }
 
     @Unique
-    private int getLight(BlockPos pos, HashMap<BlockPos, Integer> blockLights, float x, float y, Direction direction) {
-        int light = blockLights.get(pos);
+    private static int getLight(int[][][] blockLights, float x, float y, Direction direction) {
+        int light = blockLights[1][1][1];
 
         int tl = light, tr = light, bl = light, br = light;
 
         // This block is tl
         if (x > 0.5f && y > 0.5f) {
-            bl = getLightRelative(0, -1, pos, direction, blockLights);
-            tr = getLightRelative(1, 0, pos, direction, blockLights);
-            br = getLightRelative(1, -1, pos, direction, blockLights);
+            bl = getLightRelative(0, -1, direction, blockLights);
+            tr = getLightRelative(1, 0, direction, blockLights);
+            br = getLightRelative(1, -1, direction, blockLights);
         }
 
         // This block is tr
         if (x < 0.5f && y > 0.5f) {
-            tl = getLightRelative(-1, 0, pos, direction, blockLights);
-            bl = getLightRelative(-1, -1, pos, direction, blockLights);
-            br = getLightRelative(0, -1, pos, direction, blockLights);
+            tl = getLightRelative(-1, 0, direction, blockLights);
+            bl = getLightRelative(-1, -1, direction, blockLights);
+            br = getLightRelative(0, -1, direction, blockLights);
         }
 
         // This block is bl
         if (x > 0.5f && y < 0.5f) {
-            tl = getLightRelative(0, 1, pos, direction, blockLights);
-            tr = getLightRelative(1, 1, pos, direction, blockLights);
-            br = getLightRelative(1, 0, pos, direction, blockLights);
+            tl = getLightRelative(0, 1, direction, blockLights);
+            tr = getLightRelative(1, 1, direction, blockLights);
+            br = getLightRelative(1, 0, direction, blockLights);
         }
 
         // This block is br
         if (x < 0.5f && y < 0.5f) {
-            tl = getLightRelative(-1, 1, pos, direction, blockLights);
-            bl = getLightRelative(-1, 0, pos, direction, blockLights);
-            tr = getLightRelative(0, 1, pos, direction, blockLights);
+            tl = getLightRelative(-1, 1, direction, blockLights);
+            bl = getLightRelative(-1, 0, direction, blockLights);
+            tr = getLightRelative(0, 1, direction, blockLights);
         }
 
-        float xFrac = x < 0.5f ? (x + 0.5f) : (x - 0.5f);
-        float yFrac = y < 0.5f ? (y + 0.5f) : (y - 0.5f);
+        //float xFrac = x < 0.5f ? (x + 0.5f) : (x - 0.5f);
+        //float yFrac = y < 0.5f ? (y + 0.5f) : (y - 0.5f);
 
-        int lightBlock = bilinearInterp(xFrac, yFrac, tl & 0xFFFF, tr & 0xFFFF, bl & 0xFFFF, br & 0xFFFF);
-        int lightSky = bilinearInterp(xFrac, yFrac, tl >> 16, tr >> 16, bl >> 16, br >> 16);
+        // The verts are always exactly at the midpoint of the 4 blocks, so we can just average
+        //int lightBlock = MathUtil.bilinearInterp(xFrac, yFrac, tl & 0xFFFF, tr & 0xFFFF, bl & 0xFFFF, br & 0xFFFF);
+        //int lightSky = MathUtil.bilinearInterp(xFrac, yFrac, tl >> 16, tr >> 16, bl >> 16, br >> 16);
+        int lightBlock = MathUtil.midOf4(tl & 0xFFFF, tr & 0xFFFF, bl & 0xFFFF, br & 0xFFFF);
+        int lightSky = MathUtil.midOf4(tl >> 16, tr >> 16, bl >> 16, br >> 16);
 
         return lightBlock + (lightSky << 16);
     }
 
-
     @Unique
-    private int bilinearInterp(float x, float y, int tl, int tr, int bl, int br) {
-        float t = (float)tl + (float)(tr - tl) * x;
-        float b = (float)bl + (float)(br - bl) * x;
-        return (int)(t + (b - t) * y);
-    }
-
-    @Unique
-    private int getLightRelative(int xStep, int yStep, BlockPos blockPos, Direction dir, HashMap<BlockPos, Integer> blockLights) {
+    private static int getLightRelative(int xStep, int yStep, Direction dir, int[][][] blockLights) {
         Direction leftDir = switch(dir) {
             case DOWN -> Direction.WEST;
             case UP -> Direction.WEST;
@@ -245,7 +351,7 @@ public class MapRendererMixin {
             case NORTH, SOUTH, WEST, EAST -> Direction.DOWN;
         };
 
-        BlockPos.MutableBlockPos pos = blockPos.mutable();
+        BlockPos.MutableBlockPos pos = BlockPos.ZERO.mutable();
 
         if (xStep > 0)
             pos.move(rightDir, 1);
@@ -259,6 +365,6 @@ public class MapRendererMixin {
         if (yStep < 0)
             pos.move(downDir, 1);
 
-        return blockLights.get(pos);
+        return blockLights[pos.getX()+1][pos.getY()+1][pos.getZ()+1];
     }
 }

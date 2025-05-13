@@ -4,10 +4,13 @@
   "package": "cc.barnab.smoothmaps.mixin.client",
   "compatibilityLevel": "JAVA_21",
   "client": [
+    "GameRendererMixin",
+    "LightMixin",
     "PaintingRendererMixin",
     "map.ItemFrameRendererMixin",
     "map.MapRendererMixin",
-    "map.MapRenderStateMixin"
+    "map.MapRenderStateMixin",
+    "LevelLightEngineMixin"
   ],
   "injectors": {
     "defaultRequire": 1

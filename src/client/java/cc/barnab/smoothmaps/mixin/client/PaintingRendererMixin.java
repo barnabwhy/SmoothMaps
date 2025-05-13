@@ -1,16 +1,23 @@
 package cc.barnab.smoothmaps.mixin.client;
 
+import cc.barnab.smoothmaps.client.GameRenderTimeGetter;
+import cc.barnab.smoothmaps.client.LightUpdateAccessor;
+import cc.barnab.smoothmaps.client.MathUtil;
 import com.llamalad7.mixinextras.injector.v2.WrapWithCondition;
 import com.llamalad7.mixinextras.sugar.Local;
 import com.llamalad7.mixinextras.sugar.Share;
 import com.llamalad7.mixinextras.sugar.ref.LocalBooleanRef;
+import com.llamalad7.mixinextras.sugar.ref.LocalRef;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexConsumer;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.client.renderer.entity.PaintingRenderer;
+import net.minecraft.client.renderer.entity.state.PaintingRenderState;
 import net.minecraft.client.renderer.texture.OverlayTexture;
+import net.minecraft.core.BlockPos;
+import net.minecraft.world.level.lighting.LevelLightEngine;
 import org.spongepowered.asm.mixin.Mixin;
-import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
@@ -23,11 +30,43 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 @Mixin(PaintingRenderer.class)
 public abstract class PaintingRendererMixin {
-
-    @Shadow protected abstract void vertex(PoseStack.Pose pose, VertexConsumer vertexConsumer, float f, float g, float h, float i, float j, int k, int l, int m, int n);
-
     @Unique
     private static final String VERTEX_TARGET = "Lnet/minecraft/client/renderer/entity/PaintingRenderer;vertex(Lcom/mojang/blaze3d/vertex/PoseStack$Pose;Lcom/mojang/blaze3d/vertex/VertexConsumer;FFFFFIIII)V";
+
+    @Unique
+    BlockPos lastBlockPos = null;
+    @Unique
+    long lastUpdatedLights = -1L;
+    @Unique
+    int[] vertLights;
+
+    @Inject(method = "render(Lnet/minecraft/client/renderer/entity/state/PaintingRenderState;Lcom/mojang/blaze3d/vertex/PoseStack;Lnet/minecraft/client/renderer/MultiBufferSource;I)V", at = @At("HEAD"))
+    private void render(
+            PaintingRenderState paintingRenderState, PoseStack poseStack, MultiBufferSource multiBufferSource, int i, CallbackInfo ci
+    ) {
+        if (Minecraft.useAmbientOcclusion()) {
+            BlockPos blockPos = BlockPos.containing(paintingRenderState.x, paintingRenderState.y, paintingRenderState.z);
+
+            // Clear vertex lights from previous
+            assert Minecraft.getInstance().level != null;
+            LevelLightEngine lightEngine = Minecraft.getInstance().level.getLightEngine();
+
+            if (((LightUpdateAccessor)lightEngine).getLastUpdated() > lastUpdatedLights || !blockPos.equals(lastBlockPos)) {
+                assert paintingRenderState.variant != null;
+
+                int frontFaceVertCount = (paintingRenderState.variant.width() + 1) * (paintingRenderState.variant.height() + 1);
+                if (vertLights == null || vertLights.length < frontFaceVertCount)
+                    vertLights = new int[frontFaceVertCount];
+
+                for (int v = 0; v < frontFaceVertCount; v++)
+                    vertLights[v] = -1;
+
+                lastUpdatedLights = ((GameRenderTimeGetter)Minecraft.getInstance().gameRenderer).getLastRenderTime();
+                lastBlockPos = blockPos;
+            }
+        }
+    }
+
 
     @Inject(method = "renderPainting", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/renderer/texture/TextureAtlasSprite;getV(F)F", ordinal = 2))
     private void performEdgeChecks(
@@ -39,7 +78,8 @@ public abstract class PaintingRendererMixin {
             @Share("isNorthEdge")LocalBooleanRef isNorthEdge,
             @Share("isEastEdge")LocalBooleanRef isEastEdge,
             @Share("isSouthEdge")LocalBooleanRef isSouthEdge,
-            @Share("isWestEdge")LocalBooleanRef isWestEdge
+            @Share("isWestEdge")LocalBooleanRef isWestEdge,
+            @Share("blockPos") LocalRef<BlockPos> blockPos
     ) {
         isNorthEdge.set(blockY == pHeight - 1);
         isWestEdge.set(blockX == pWidth - 1);
@@ -124,9 +164,16 @@ public abstract class PaintingRendererMixin {
             @Local(ordinal = 3) int blockY
     ) {
         if (Minecraft.useAmbientOcclusion()) {
-            float xInBlock = f + (float) pWidth / 2.0f - blockX;
-            float yInBlock = g + (float) pHeight / 2.0f - blockY;
-            n = getLight(blockX, blockY, pWidth, pHeight, lightCoords, xInBlock, yInBlock);
+            int packedVertPos = (int)((g + (float) pHeight / 2.0f) * (pWidth+1) + (f + (float) pWidth / 2.0f));
+            if (vertLights[packedVertPos] != -1) {
+                n = vertLights[packedVertPos];
+            } else {
+                float xInBlock = f + (float) pWidth / 2.0f - blockX;
+                float yInBlock = g + (float) pHeight / 2.0f - blockY;
+                n = getLight(blockX, blockY, pWidth, pHeight, lightCoords, xInBlock, yInBlock);
+
+                vertLights[packedVertPos] = n;
+            }
         }
 
         vertexConsumer.addVertex(pose, f, g, j).setColor(-1).setUv(h, i).setOverlay(OverlayTexture.NO_OVERLAY).setLight(n).setNormal(pose, (float)k, (float)l, (float)m);
@@ -166,20 +213,16 @@ public abstract class PaintingRendererMixin {
             tr = getLightRelative(0, 1, blockX, blockY, pWidth, pHeight, lightCoords);
         }
 
-        float xFrac = x < 0.5f ? (x + 0.5f) : (x - 0.5f);
-        float yFrac = y < 0.5f ? (y + 0.5f) : (y - 0.5f);
+        //float xFrac = x < 0.5f ? (x + 0.5f) : (x - 0.5f);
+        //float yFrac = y < 0.5f ? (y + 0.5f) : (y - 0.5f);
 
-        int lightBlock = bilinearInterp(xFrac, yFrac, tl & 0xFFFF, tr & 0xFFFF, bl & 0xFFFF, br & 0xFFFF);
-        int lightSky = bilinearInterp(xFrac, yFrac, tl >> 16 & 0xFFFF, tr >> 16 & 0xFFFF, bl >> 16 & 0xFFFF, br >> 16 & 0xFFFF);
+        // The verts are always exactly at the midpoint of the 4 blocks, so we can just average
+        //int lightBlock = MathUtil.bilinearInterp(xFrac, yFrac, tl & 0xFFFF, tr & 0xFFFF, bl & 0xFFFF, br & 0xFFFF);
+        //int lightSky = MathUtil.bilinearInterp(xFrac, yFrac, tl >> 16, tr >> 16, bl >> 16, br >> 16);
+        int lightBlock = MathUtil.midOf4(tl & 0xFFFF, tr & 0xFFFF, bl & 0xFFFF, br & 0xFFFF);
+        int lightSky = MathUtil.midOf4(tl >> 16, tr >> 16, bl >> 16, br >> 16);
 
         return lightBlock + (lightSky << 16);
-    }
-
-    @Unique
-    private int bilinearInterp(float x, float y, int tl, int tr, int bl, int br) {
-        float t = (float)tl + (float)(tr - tl) * x;
-        float b = (float)bl + (float)(br - bl) * x;
-        return (int)(t + (b - t) * y);
     }
 
     @Unique
