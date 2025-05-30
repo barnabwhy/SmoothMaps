@@ -72,7 +72,7 @@ public class MapRendererMixin implements RenderRelightCounter {
     }
 
     @Unique
-    private boolean shouldSmoothLight(boolean isInFrame, MapRenderState mapRenderState) {
+    private boolean shouldSmoothLight(boolean isInFrame, MapRenderState mapRenderState, boolean shouldReuseVertexLights) {
         if (!isInFrame)
             return false;
 
@@ -81,6 +81,11 @@ public class MapRendererMixin implements RenderRelightCounter {
 
         if (!Minecraft.useAmbientOcclusion())
             return false;
+
+        // If we're reusing the light values it's faster than these checks
+        // So just skip them and allow smooth lighting
+        if (shouldReuseVertexLights)
+            return true;
 
         // Optimisations to disable smooth lighting in situations you wouldn't see it
         GameRenderer gameRenderer = Minecraft.getInstance().gameRenderer;
@@ -122,31 +127,28 @@ public class MapRendererMixin implements RenderRelightCounter {
     ) {
         numRendered++;
 
-        // Don't smooth light held maps or glow frames
-        shouldSmoothLight = shouldSmoothLight(bl, mapRenderState);
-        if (!shouldSmoothLight)
-            return;
-
-        vertNum = 0;
-        BlockPos blockPos = mapRenderState.getBlockPos();
-
-        originalLight.set(i);
-
         // Check if we can reuse vertex lights
         assert Minecraft.getInstance().level != null;
         LevelLightEngine lightEngine = Minecraft.getInstance().level.getLightEngine();
 
+        BlockPos blockPos = mapRenderState.getBlockPos();
         ItemFrame itemFrame = mapRenderState.getItemFrame();
+        shouldReuseVertexLights = ((LightUpdateAccessor)lightEngine).getLastUpdated() <= itemFrame.getLastUpdated() && blockPos.equals(itemFrame.getLastBlockPos());
 
+        // Don't smooth light held maps or glow frames
+        shouldSmoothLight = shouldSmoothLight(bl, mapRenderState, shouldReuseVertexLights);
+        if (!shouldSmoothLight)
+            return;
+
+        vertNum = 0;
+        originalLight.set(i);
         vertexLights = itemFrame.getVertLights();
 
-        if (((LightUpdateAccessor)lightEngine).getLastUpdated() <= itemFrame.getLastUpdated() && blockPos.equals(itemFrame.getLastBlockPos())) {
-            shouldReuseVertexLights = true;
+        if (shouldReuseVertexLights) {
             return;
         }
 
         numRelit++;
-        shouldReuseVertexLights = false;
         itemFrame.setLastUpdated(Minecraft.getInstance().gameRenderer.getLastRenderTime());
         itemFrame.setLastBlockPos(blockPos);
 
