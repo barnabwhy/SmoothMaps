@@ -1,6 +1,5 @@
 package cc.barnab.smoothmaps.mixin.client;
 
-import cc.barnab.smoothmaps.client.GameRenderTimeGetter;
 import cc.barnab.smoothmaps.client.LightUpdateAccessor;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.LightTexture;
@@ -13,7 +12,7 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 @Mixin(LightTexture.class)
-public class LightMixin implements LightUpdateAccessor {
+public class LightTextureMixin implements LightUpdateAccessor {
     @Shadow private boolean updateLightTexture;
     @Shadow @Final private Minecraft minecraft;
     @Unique
@@ -27,6 +26,6 @@ public class LightMixin implements LightUpdateAccessor {
     @Inject(method = "updateLightTexture(F)V", at = @At("HEAD"))
     void updateLightTexture(float f, CallbackInfo ci) {
         if (updateLightTexture)
-            lastUpdated = ((GameRenderTimeGetter)minecraft.gameRenderer).getLastRenderTime();
+            lastUpdated = minecraft.gameRenderer.getLastRenderTime();
     }
 }

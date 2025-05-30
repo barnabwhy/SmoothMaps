@@ -2,6 +2,7 @@ package cc.barnab.smoothmaps.client;
 
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
+import net.minecraft.world.entity.decoration.ItemFrame;
 
 public interface MapRenderStateAccessor {
     default void setBlockPos(BlockPos bPos) {};

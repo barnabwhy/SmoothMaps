@@ -1,15 +1,17 @@
 package cc.barnab.smoothmaps.mixin.client.map;
 
+import cc.barnab.smoothmaps.client.ItemFrameStateAccessor;
 import cc.barnab.smoothmaps.client.MapRenderStateAccessor;
 import net.minecraft.client.renderer.state.MapRenderState;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
+import net.minecraft.world.entity.decoration.ItemFrame;
 import org.jetbrains.annotations.Nullable;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Unique;
 
 @Mixin(MapRenderState.class)
-public class MapRenderStateMixin implements MapRenderStateAccessor {
+public class MapRenderStateMixin implements MapRenderStateAccessor, ItemFrameStateAccessor {
     @Unique
     @Nullable
     BlockPos blockPos;
@@ -22,6 +24,9 @@ public class MapRenderStateMixin implements MapRenderStateAccessor {
 
     @Unique
     int rotation;
+
+    @Unique
+    public ItemFrame itemFrame;
 
     @Override
     public void setBlockPos(@Nullable BlockPos bPos) {
@@ -61,5 +66,14 @@ public class MapRenderStateMixin implements MapRenderStateAccessor {
     @Override
     public int rotation() {
         return rotation;
+    }
+
+    @Override
+    public ItemFrame getItemFrame() {
+        return itemFrame;
+    }
+    @Override
+    public void setItemFrame(ItemFrame itemFrame) {
+        this.itemFrame = itemFrame;
     }
 }

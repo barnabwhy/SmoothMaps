@@ -8,3 +8,5 @@ accessible field net/minecraft/world/level/lighting/LevelLightEngine blockEngine
 accessible method net/minecraft/client/renderer/GameRenderer getFov (Lnet/minecraft/client/Camera;FZ)F
 accessible field net/minecraft/client/renderer/GameRenderer fovModifier F
 accessible field net/minecraft/client/renderer/GameRenderer oldFovModifier F
+
+accessible field net/minecraft/client/renderer/entity/EntityRenderDispatcher renderers Ljava/util/Map;

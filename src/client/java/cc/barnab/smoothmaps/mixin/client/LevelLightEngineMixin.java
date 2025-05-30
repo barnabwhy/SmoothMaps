@@ -24,6 +24,6 @@ public class LevelLightEngineMixin implements LightUpdateAccessor {
     void runLightUpdates(CallbackInfoReturnable<Integer> cir) {
         // If any light updates happened
         if (cir.getReturnValue() > 0)
-            lastUpdated = ((GameRenderTimeGetter)Minecraft.getInstance().gameRenderer).getLastRenderTime();
+            lastUpdated = Minecraft.getInstance().gameRenderer.getLastRenderTime();
     }
 }

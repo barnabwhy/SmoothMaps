@@ -1,9 +1,15 @@
 package cc.barnab.smoothmaps.mixin.client;
 
 import cc.barnab.smoothmaps.client.GameRenderTimeGetter;
+import cc.barnab.smoothmaps.mixin.client.map.MapRendererMixin;
+import cc.barnab.smoothmaps.mixin.client.painting.PaintingRendererMixin;
 import net.minecraft.Util;
 import net.minecraft.client.DeltaTracker;
+import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.GameRenderer;
+import net.minecraft.client.renderer.MapRenderer;
+import net.minecraft.client.renderer.entity.PaintingRenderer;
+import net.minecraft.world.entity.EntityType;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
@@ -23,5 +29,10 @@ public class GameRendererMixin implements GameRenderTimeGetter {
     @Inject(method = "render", at = @At("HEAD"))
     void render(DeltaTracker deltaTracker, boolean bl, CallbackInfo ci) {
         lastFrameRenderTime = Util.getNanos();
+        Minecraft.getInstance().getMapRenderer().resetCounters();
+
+        PaintingRenderer paintingRenderer = (PaintingRenderer) Minecraft.getInstance().getEntityRenderDispatcher().renderers.get(EntityType.PAINTING);
+        if (paintingRenderer != null)
+            paintingRenderer.resetCounters();
     }
 }

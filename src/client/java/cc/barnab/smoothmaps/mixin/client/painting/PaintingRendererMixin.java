@@ -1,8 +1,6 @@
-package cc.barnab.smoothmaps.mixin.client;
+package cc.barnab.smoothmaps.mixin.client.painting;
 
-import cc.barnab.smoothmaps.client.GameRenderTimeGetter;
-import cc.barnab.smoothmaps.client.LightUpdateAccessor;
-import cc.barnab.smoothmaps.client.MathUtil;
+import cc.barnab.smoothmaps.client.*;
 import com.llamalad7.mixinextras.injector.v2.WrapWithCondition;
 import com.llamalad7.mixinextras.sugar.Local;
 import com.llamalad7.mixinextras.sugar.Share;
@@ -16,6 +14,7 @@ import net.minecraft.client.renderer.entity.PaintingRenderer;
 import net.minecraft.client.renderer.entity.state.PaintingRenderState;
 import net.minecraft.client.renderer.texture.OverlayTexture;
 import net.minecraft.core.BlockPos;
+import net.minecraft.world.entity.decoration.Painting;
 import net.minecraft.world.level.lighting.LevelLightEngine;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Unique;
@@ -29,21 +28,45 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
  */
 
 @Mixin(PaintingRenderer.class)
-public abstract class PaintingRendererMixin {
+public abstract class PaintingRendererMixin implements RenderRelightCounter {
     @Unique
     private static final String VERTEX_TARGET = "Lnet/minecraft/client/renderer/entity/PaintingRenderer;vertex(Lcom/mojang/blaze3d/vertex/PoseStack$Pose;Lcom/mojang/blaze3d/vertex/VertexConsumer;FFFFFIIII)V";
 
     @Unique
-    BlockPos lastBlockPos = null;
+    private int numRendered = 0;
     @Unique
-    long lastUpdatedLights = -1L;
+    private int numRelit = 0;
+
     @Unique
-    int[] vertLights;
+    private int[] vertLightsShared;
+
+    @Override
+    public int getNumRendered() {
+        return numRendered;
+    }
+    @Override
+    public int getNumRelit() {
+        return numRelit;
+    }
+
+    @Override
+    public void resetCounters() {
+        numRendered = 0;
+        numRelit = 0;
+    }
+
+    @Inject(method = "extractRenderState(Lnet/minecraft/world/entity/decoration/Painting;Lnet/minecraft/client/renderer/entity/state/PaintingRenderState;F)V", at = @At("TAIL"))
+    public void extractRenderState(Painting painting, PaintingRenderState paintingRenderState, float f, CallbackInfo ci) {
+        paintingRenderState.setPainting(painting);
+    }
+
 
     @Inject(method = "render(Lnet/minecraft/client/renderer/entity/state/PaintingRenderState;Lcom/mojang/blaze3d/vertex/PoseStack;Lnet/minecraft/client/renderer/MultiBufferSource;I)V", at = @At("HEAD"))
     private void render(
             PaintingRenderState paintingRenderState, PoseStack poseStack, MultiBufferSource multiBufferSource, int i, CallbackInfo ci
     ) {
+        numRendered++;
+
         if (Minecraft.useAmbientOcclusion()) {
             BlockPos blockPos = BlockPos.containing(paintingRenderState.x, paintingRenderState.y, paintingRenderState.z);
 
@@ -51,7 +74,10 @@ public abstract class PaintingRendererMixin {
             assert Minecraft.getInstance().level != null;
             LevelLightEngine lightEngine = Minecraft.getInstance().level.getLightEngine();
 
-            if (((LightUpdateAccessor)lightEngine).getLastUpdated() > lastUpdatedLights || !blockPos.equals(lastBlockPos)) {
+            Painting painting = paintingRenderState.getPainting();
+            int[] vertLights = painting.getVertLights();
+
+            if (((LightUpdateAccessor)lightEngine).getLastUpdated() > painting.getLastUpdated() || !blockPos.equals(painting.getLastBlockPos()) || vertLights == null) {
                 assert paintingRenderState.variant != null;
 
                 int frontFaceVertCount = (paintingRenderState.variant.width() + 1) * (paintingRenderState.variant.height() + 1);
@@ -61,9 +87,14 @@ public abstract class PaintingRendererMixin {
                 for (int v = 0; v < frontFaceVertCount; v++)
                     vertLights[v] = -1;
 
-                lastUpdatedLights = ((GameRenderTimeGetter)Minecraft.getInstance().gameRenderer).getLastRenderTime();
-                lastBlockPos = blockPos;
+                numRelit++;
+                painting.setVertLights(vertLights);
+
+                painting.setLastUpdated(Minecraft.getInstance().gameRenderer.getLastRenderTime());
+                painting.setLastBlockPos(blockPos);
             }
+
+            vertLightsShared = vertLights;
         }
     }
 
@@ -164,6 +195,8 @@ public abstract class PaintingRendererMixin {
             @Local(ordinal = 3) int blockY
     ) {
         if (Minecraft.useAmbientOcclusion()) {
+            int[] vertLights = vertLightsShared;
+
             int packedVertPos = (int)((g + (float) pHeight / 2.0f) * (pWidth+1) + (f + (float) pWidth / 2.0f));
             if (vertLights[packedVertPos] != -1) {
                 n = vertLights[packedVertPos];

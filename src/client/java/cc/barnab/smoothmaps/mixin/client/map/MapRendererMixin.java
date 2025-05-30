@@ -1,8 +1,8 @@
 package cc.barnab.smoothmaps.mixin.client.map;
 
-import cc.barnab.smoothmaps.client.GameRenderTimeGetter;
 import cc.barnab.smoothmaps.client.LightUpdateAccessor;
 import cc.barnab.smoothmaps.client.MathUtil;
+import cc.barnab.smoothmaps.client.RenderRelightCounter;
 import com.llamalad7.mixinextras.sugar.Local;
 import com.llamalad7.mixinextras.sugar.Share;
 import com.llamalad7.mixinextras.sugar.ref.LocalIntRef;
@@ -16,7 +16,7 @@ import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.client.renderer.state.MapRenderState;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
-import net.minecraft.core.Vec3i;
+import net.minecraft.world.entity.decoration.ItemFrame;
 import net.minecraft.world.level.lighting.LevelLightEngine;
 import org.joml.Matrix4f;
 import org.joml.Vector3f;
@@ -29,18 +29,14 @@ import org.spongepowered.asm.mixin.injection.Slice;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 @Mixin(MapRenderer.class)
-public class MapRendererMixin {
+public class MapRendererMixin implements RenderRelightCounter {
     @Unique
     boolean shouldReuseVertexLights = false;
     @Unique
     int[] vertexLights = new int[4];
 
     @Unique
-    long lastUpdatedLights = -1L;
-    @Unique
     byte vertNum = 0;
-    @Unique
-    BlockPos lastBlockPos = null;
 
     @Unique
     private final static int[][] vertexRotationMap = new int[][]{
@@ -54,6 +50,26 @@ public class MapRendererMixin {
 
     @Unique
     boolean shouldSmoothLight = false;
+
+    @Unique
+    private int numRendered = 0;
+    @Unique
+    private int numRelit = 0;
+
+    @Override
+    public int getNumRendered() {
+        return numRendered;
+    }
+    @Override
+    public int getNumRelit() {
+        return numRelit;
+    }
+
+    @Override
+    public void resetCounters() {
+        numRendered = 0;
+        numRelit = 0;
+    }
 
     @Unique
     private boolean shouldSmoothLight(boolean isInFrame, MapRenderState mapRenderState) {
@@ -104,6 +120,8 @@ public class MapRendererMixin {
             CallbackInfo ci,
             @Share("originalLight") LocalIntRef originalLight
     ) {
+        numRendered++;
+
         // Don't smooth light held maps or glow frames
         shouldSmoothLight = shouldSmoothLight(bl, mapRenderState);
         if (!shouldSmoothLight)
@@ -118,14 +136,19 @@ public class MapRendererMixin {
         assert Minecraft.getInstance().level != null;
         LevelLightEngine lightEngine = Minecraft.getInstance().level.getLightEngine();
 
-        if (((LightUpdateAccessor)lightEngine).getLastUpdated() <= lastUpdatedLights && blockPos.equals(lastBlockPos)) {
+        ItemFrame itemFrame = mapRenderState.getItemFrame();
+
+        vertexLights = itemFrame.getVertLights();
+
+        if (((LightUpdateAccessor)lightEngine).getLastUpdated() <= itemFrame.getLastUpdated() && blockPos.equals(itemFrame.getLastBlockPos())) {
             shouldReuseVertexLights = true;
             return;
         }
 
+        numRelit++;
         shouldReuseVertexLights = false;
-        lastUpdatedLights = Minecraft.getInstance().gameRenderer.getLastRenderTime();
-        lastBlockPos = blockPos;
+        itemFrame.setLastUpdated(Minecraft.getInstance().gameRenderer.getLastRenderTime());
+        itemFrame.setLastBlockPos(blockPos);
 
         // Get light levels for surrounding blocks
         for (int x = -1; x <= 1; x++) {
@@ -254,6 +277,9 @@ public class MapRendererMixin {
             }
 
             vertNum++;
+
+            if (vertNum == 3 && !shouldReuseVertexLights)
+                mapRenderState.getItemFrame().setVertLights(vertexLights);
         }
 
         return instance.addVertex(matrix4f, f, g, h);

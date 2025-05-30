@@ -30,9 +30,15 @@
   ],
   "custom": {
     "loom:injected_interfaces": {
-      "net/minecraft/class_10090": ["cc/barnab/smoothmaps/client/MapRenderStateAccessor"],
+      "net/minecraft/class_10090": ["cc/barnab/smoothmaps/client/MapRenderStateAccessor","cc/barnab/smoothmaps/client/ItemFrameStateAccessor"],
       "net/minecraft/class_765": ["cc/barnab/smoothmaps/client/LightUpdateAccessor"],
-      "net/minecraft/class_757": ["cc/barnab/smoothmaps/client/GameRenderTimeGetter"]
+      "net/minecraft/class_757": ["cc/barnab/smoothmaps/client/GameRenderTimeGetter"],
+      "net/minecraft/class_330": ["cc/barnab/smoothmaps/client/RenderRelightCounter"],
+      "net/minecraft/class_928": ["cc/barnab/smoothmaps/client/RenderRelightCounter"],
+      "net/minecraft/class_10049": ["cc/barnab/smoothmaps/client/PaintingStateAccessor"],
+      "net/minecraft/class_1534": ["cc/barnab/smoothmaps/client/PaintingLightAccessor"],
+      "net/minecraft/class_10040": ["cc/barnab/smoothmaps/client/ItemFrameStateAccessor"],
+      "net/minecraft/class_1533": ["cc/barnab/smoothmaps/client/ItemFrameLightAccessor"]
     }
   },
 
