@@ -133,6 +133,16 @@ public class MapRendererMixin implements RenderRelightCounter {
 
         BlockPos blockPos = mapRenderState.getBlockPos();
         ItemFrame itemFrame = mapRenderState.getItemFrame();
+
+        // Skip all this if the map isn't in an item frame
+        // Also prevents crash if a mod doesn't respect in frame bool
+        // Reported by craftish37 (https://github.com/barnabwhy/SmoothMaps/issues/1)
+        if (!bl || itemFrame == null) {
+            shouldReuseVertexLights = false;
+            shouldSmoothLight = false;
+            return;
+        }
+
         shouldReuseVertexLights = ((LightUpdateAccessor)lightEngine).getLastUpdated() <= itemFrame.getLastUpdated() && blockPos.equals(itemFrame.getLastBlockPos());
 
         // Don't smooth light held maps or glow frames
