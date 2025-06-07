@@ -77,7 +77,11 @@ public abstract class PaintingRendererMixin implements RenderRelightCounter {
             Painting painting = paintingRenderState.getPainting();
             int[] vertLights = painting.getVertLights();
 
-            if (((LightUpdateAccessor)lightEngine).getLastUpdated() > painting.getLastUpdated() || !blockPos.equals(painting.getLastBlockPos()) || vertLights == null) {
+            boolean shouldRelight = ((LightUpdateAccessor)lightEngine).getLastUpdated() > painting.getLastUpdated()
+                    || !blockPos.equals(painting.getLastBlockPos())
+                    || !painting.getDirection().equals(painting.getLastDirection())
+                    || vertLights == null;
+            if (shouldRelight) {
                 assert paintingRenderState.variant != null;
 
                 int frontFaceVertCount = (paintingRenderState.variant.width() + 1) * (paintingRenderState.variant.height() + 1);
@@ -92,6 +96,7 @@ public abstract class PaintingRendererMixin implements RenderRelightCounter {
 
                 painting.setLastUpdated(Minecraft.getInstance().gameRenderer.getLastRenderTime());
                 painting.setLastBlockPos(blockPos);
+                painting.setLastDirection(painting.getDirection());
             }
 
             vertLightsShared = vertLights;

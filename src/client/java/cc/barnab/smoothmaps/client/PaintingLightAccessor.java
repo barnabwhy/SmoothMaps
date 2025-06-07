@@ -1,6 +1,7 @@
 package cc.barnab.smoothmaps.client;
 
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
 
 public interface PaintingLightAccessor {
     default int[] getVertLights() {
@@ -12,6 +13,11 @@ public interface PaintingLightAccessor {
         return null;
     }
     default void setLastBlockPos(BlockPos lastBlockPos) {}
+
+    default Direction getLastDirection() {
+        return null;
+    }
+    default void setLastDirection(Direction lastDirection) {}
 
     default long getLastUpdated() {
         return 0L;
