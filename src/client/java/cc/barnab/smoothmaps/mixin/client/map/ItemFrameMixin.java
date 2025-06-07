@@ -2,6 +2,7 @@ package cc.barnab.smoothmaps.mixin.client.map;
 
 import cc.barnab.smoothmaps.client.ItemFrameLightAccessor;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
 import net.minecraft.world.entity.decoration.ItemFrame;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Unique;
@@ -13,6 +14,12 @@ public class ItemFrameMixin implements ItemFrameLightAccessor {
 
     @Unique
     public BlockPos lastBlockPos = null;
+
+    @Unique
+    public int lastRotation = 0;
+
+    @Unique
+    public Direction lastDirection = null;
 
     @Unique
     public long lastUpdated = -1L;
@@ -35,6 +42,23 @@ public class ItemFrameMixin implements ItemFrameLightAccessor {
     @Override
     public void setLastBlockPos(BlockPos lastBlockPos) {
         this.lastBlockPos = lastBlockPos;
+    }
+
+    public int getLastRotation() {
+        return lastRotation;
+    }
+    @Override
+    public void setLastRotation(int lastRotation) {
+        this.lastRotation = lastRotation;
+    }
+
+    @Override
+    public Direction getLastDirection() {
+        return lastDirection;
+    }
+    @Override
+    public void setLastDirection(Direction lastDirection) {
+        this.lastDirection = lastDirection;
     }
 
     @Override

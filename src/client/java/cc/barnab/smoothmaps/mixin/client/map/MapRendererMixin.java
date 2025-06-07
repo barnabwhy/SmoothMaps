@@ -72,10 +72,7 @@ public class MapRendererMixin implements RenderRelightCounter {
     }
 
     @Unique
-    private boolean shouldSmoothLight(boolean isInFrame, MapRenderState mapRenderState, boolean shouldReuseVertexLights) {
-        if (!isInFrame)
-            return false;
-
+    private boolean shouldSmoothLight(MapRenderState mapRenderState, boolean shouldReuseVertexLights) {
         if (mapRenderState.isGlowing())
             return false;
 
@@ -143,10 +140,13 @@ public class MapRendererMixin implements RenderRelightCounter {
             return;
         }
 
-        shouldReuseVertexLights = ((LightUpdateAccessor)lightEngine).getLastUpdated() <= itemFrame.getLastUpdated() && blockPos.equals(itemFrame.getLastBlockPos());
+        shouldReuseVertexLights = ((LightUpdateAccessor)lightEngine).getLastUpdated() <= itemFrame.getLastUpdated()
+                && blockPos.equals(itemFrame.getLastBlockPos())
+                && itemFrame.getDirection().equals(itemFrame.getLastDirection())
+                && itemFrame.getRotation() == itemFrame.getLastRotation();
 
         // Don't smooth light held maps or glow frames
-        shouldSmoothLight = shouldSmoothLight(bl, mapRenderState, shouldReuseVertexLights);
+        shouldSmoothLight = shouldSmoothLight(mapRenderState, shouldReuseVertexLights);
         if (!shouldSmoothLight)
             return;
 
@@ -161,6 +161,8 @@ public class MapRendererMixin implements RenderRelightCounter {
         numRelit++;
         itemFrame.setLastUpdated(Minecraft.getInstance().gameRenderer.getLastRenderTime());
         itemFrame.setLastBlockPos(blockPos);
+        itemFrame.setLastRotation(itemFrame.getRotation());
+        itemFrame.setLastDirection(itemFrame.getDirection());
 
         // Get light levels for surrounding blocks
         for (int x = -1; x <= 1; x++) {
