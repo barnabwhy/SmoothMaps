@@ -22,8 +22,8 @@
   },
 
   "mixins": [
-    "smoothmaps.mixins.json"
-    ,{
+    "smoothmaps.mixins.json",
+    {
       "config": "smoothmaps.client.mixins.json",
       "environment": "client"
     }
