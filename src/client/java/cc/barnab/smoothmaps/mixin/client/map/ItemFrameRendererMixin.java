@@ -16,12 +16,14 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 @Mixin(ItemFrameRenderer.class)
 public class ItemFrameRendererMixin {
-
     @Inject(
             method = "render(Lnet/minecraft/client/renderer/entity/state/ItemFrameRenderState;Lcom/mojang/blaze3d/vertex/PoseStack;Lnet/minecraft/client/renderer/MultiBufferSource;I)V",
-            at = @At(target = "Lnet/minecraft/client/renderer/MapRenderer;render(Lnet/minecraft/client/renderer/state/MapRenderState;Lcom/mojang/blaze3d/vertex/PoseStack;Lnet/minecraft/client/renderer/MultiBufferSource;ZI)V", value = "INVOKE")
+            at = @At("HEAD")
     )
     private void render(ItemFrameRenderState itemFrameRenderState, PoseStack poseStack, MultiBufferSource multiBufferSource, int i, CallbackInfo ci) {
+        if (itemFrameRenderState.mapId == null)
+            return;
+
         itemFrameRenderState.mapRenderState.setBlockPos(BlockPos.containing(itemFrameRenderState.x, itemFrameRenderState.y, itemFrameRenderState.z));
         itemFrameRenderState.mapRenderState.setIsGlowing(itemFrameRenderState.isGlowFrame);
         itemFrameRenderState.mapRenderState.setDirection(itemFrameRenderState.direction);
