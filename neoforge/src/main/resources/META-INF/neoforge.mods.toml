@@ -1,17 +1,17 @@
 modLoader = "javafml"
 loaderVersion = "[2,)"
-#issueTrackerURL = ""
+issueTrackerURL = "https://github.com/barnabwhy/SmoothMaps/issues"
 license = "MIT"
 
 [[mods]]
 modId = "smoothmaps"
 version = "${version}"
 displayName = "SmoothMaps"
-authors = ""
+authors = "Barnaby"
 description = '''
-
+Provides smooth lighting for framed maps, paintings and rails.
 '''
-#logoFile = ""
+logoFile = "assets/smoothmaps/icon.png"
 
 [[dependencies.smoothmaps]]
 modId = "neoforge"
