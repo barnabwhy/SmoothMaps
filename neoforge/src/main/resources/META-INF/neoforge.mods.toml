@@ -1,0 +1,35 @@
+modLoader = "javafml"
+loaderVersion = "[2,)"
+#issueTrackerURL = ""
+license = "MIT"
+
+[[mods]]
+modId = "smoothmaps"
+version = "${version}"
+displayName = "SmoothMaps"
+authors = ""
+description = '''
+
+'''
+#logoFile = ""
+
+[[dependencies.smoothmaps]]
+modId = "neoforge"
+type = "required"
+versionRange = "[21,)"
+ordering = "NONE"
+side = "BOTH"
+
+[[dependencies.smoothmaps]]
+modId = "minecraft"
+type = "required"
+versionRange = "[1.21.6,)"
+ordering = "NONE"
+side = "BOTH"
+
+
+[[mixins]]
+config = "smoothmaps.mixins.json"
+
+[[accessTransformers]]
+file="META-INF/accesstransformer.cfg"
