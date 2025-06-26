@@ -1,8 +1,8 @@
 {
   "required": true,
-  "minVersion": "0.8",
   "package": "cc.barnab.smoothmaps.mixin.client",
   "compatibilityLevel": "JAVA_21",
+  "minVersion": "0.8",
   "client": [
     "DebugScreenOverlayMixin",
     "GameRendererMixin",
@@ -12,14 +12,14 @@
     "map.ItemFrameRenderStateMixin",
     "map.MapRendererMixin",
     "map.MapRenderStateMixin",
+    "map.ItemFrameMixin",
     "painting.PaintingRendererMixin",
-    "painting.PaintingRenderStateMixin"
+    "painting.PaintingRenderStateMixin",
+    "painting.PaintingMixin"
+  ],
+  "mixins": [
   ],
   "injectors": {
     "defaultRequire": 1
-  },
-  "mixins": [
-    "map.ItemFrameMixin",
-    "painting.PaintingMixin"
-  ]
+  }
 }
