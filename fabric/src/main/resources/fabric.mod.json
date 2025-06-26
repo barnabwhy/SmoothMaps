@@ -36,8 +36,7 @@
   "depends": {
     "fabricloader": ">=${fabric_loader_version}",
     "minecraft": ">=${min_minecraft_version} <=${max_minecraft_version}",
-    "java": ">=21",
-    "fabric-api": "*"
+    "java": ">=21"
   },
   "conflicts": {
     "moreculling": "<=1.3.1"
