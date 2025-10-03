@@ -9,19 +9,24 @@ import com.llamalad7.mixinextras.sugar.ref.LocalRef;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexConsumer;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.renderer.MultiBufferSource;
+import net.minecraft.client.renderer.RenderType;
+import net.minecraft.client.renderer.SubmitNodeCollector;
 import net.minecraft.client.renderer.entity.PaintingRenderer;
 import net.minecraft.client.renderer.entity.state.PaintingRenderState;
 import net.minecraft.client.renderer.texture.OverlayTexture;
+import net.minecraft.client.renderer.texture.TextureAtlasSprite;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.entity.decoration.Painting;
 import net.minecraft.world.level.lighting.LevelLightEngine;
 import org.spongepowered.asm.mixin.Mixin;
+import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.Redirect;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
+
+import java.util.Arrays;
 
 /**
  * Purpose: Prevents rendering of unnecessary painting vertices & Adds smooth lighting
@@ -29,6 +34,8 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 @Mixin(PaintingRenderer.class)
 public abstract class PaintingRendererMixin implements RenderRelightCounter {
+    @Shadow protected abstract void renderPainting(PoseStack arg, SubmitNodeCollector arg2, RenderType arg3, int[] is, int i, int j, TextureAtlasSprite arg4, TextureAtlasSprite arg5);
+
     @Unique
     private static final String VERTEX_TARGET = "Lnet/minecraft/client/renderer/entity/PaintingRenderer;vertex(Lcom/mojang/blaze3d/vertex/PoseStack$Pose;Lcom/mojang/blaze3d/vertex/VertexConsumer;FFFFFIIII)V";
 
@@ -36,9 +43,6 @@ public abstract class PaintingRendererMixin implements RenderRelightCounter {
     private int numRendered = 0;
     @Unique
     private int numRelit = 0;
-
-    @Unique
-    private int[] vertLightsShared;
 
     @Override
     public int getNumRendered() {
@@ -60,51 +64,60 @@ public abstract class PaintingRendererMixin implements RenderRelightCounter {
         paintingRenderState.setPainting(painting);
     }
 
-
-    @Inject(method = "render(Lnet/minecraft/client/renderer/entity/state/PaintingRenderState;Lcom/mojang/blaze3d/vertex/PoseStack;Lnet/minecraft/client/renderer/MultiBufferSource;I)V", at = @At("HEAD"))
-    private void render(
-            PaintingRenderState paintingRenderState, PoseStack poseStack, MultiBufferSource multiBufferSource, int i, CallbackInfo ci
-    ) {
+    @Inject(
+            method = "extractRenderState(Lnet/minecraft/world/entity/decoration/Painting;Lnet/minecraft/client/renderer/entity/state/PaintingRenderState;F)V",
+            at = @At(value = "TAIL")
+    )
+    private void lightPainting(Painting painting, PaintingRenderState paintingRenderState, float f, CallbackInfo ci) {
         numRendered++;
 
         if (Minecraft.useAmbientOcclusion()) {
+            assert paintingRenderState.variant != null;
+
+            int[] vertLights = painting.getVertLights();
+
             BlockPos blockPos = BlockPos.containing(paintingRenderState.x, paintingRenderState.y, paintingRenderState.z);
 
-            // Clear vertex lights from previous
             assert Minecraft.getInstance().level != null;
             LevelLightEngine lightEngine = Minecraft.getInstance().level.getLightEngine();
-
-            Painting painting = paintingRenderState.getPainting();
-            int[] vertLights = painting.getVertLights();
 
             boolean shouldRelight = ((LightUpdateAccessor)lightEngine).getLastUpdated() > painting.getLastUpdated()
                     || !blockPos.equals(painting.getLastBlockPos())
                     || !painting.getDirection().equals(painting.getLastDirection())
                     || vertLights == null;
-            if (shouldRelight) {
-                assert paintingRenderState.variant != null;
 
-                int frontFaceVertCount = (paintingRenderState.variant.width() + 1) * (paintingRenderState.variant.height() + 1);
+            if (shouldRelight) {
+                int pWidth = paintingRenderState.variant.width();
+                int pHeight = paintingRenderState.variant.height();
+
+                int frontFaceVertCount = (pWidth + 1) * (pHeight + 1);
                 if (vertLights == null || vertLights.length < frontFaceVertCount)
                     vertLights = new int[frontFaceVertCount];
 
-                for (int v = 0; v < frontFaceVertCount; v++)
-                    vertLights[v] = -1;
+
+                for (int v = 0; v < frontFaceVertCount; v++) {
+                    int blockX = Math.min(v % (pWidth + 1), pWidth-1);
+                    int blockY = Math.min(v / (pWidth + 1), pHeight-1);
+                    int blockIdx = blockY * pWidth + blockX;
+
+                    float xInBlock = v % (pWidth + 1) > (blockX) ? 0.5f : -0.5f;
+                    float yInBlock = v > (blockIdx + blockY) ? 0.5f : -0.5f;
+                    vertLights[v] = getLight(blockX, blockY, pWidth, pHeight, paintingRenderState.lightCoordsPerBlock, xInBlock, yInBlock);
+                }
 
                 numRelit++;
                 painting.setVertLights(vertLights);
-
                 painting.setLastUpdated(Minecraft.getInstance().gameRenderer.getLastRenderTime());
                 painting.setLastBlockPos(blockPos);
                 painting.setLastDirection(painting.getDirection());
             }
 
-            vertLightsShared = vertLights;
+            paintingRenderState.lightCoordsPerBlock = vertLights;
         }
     }
 
 
-    @Inject(method = "renderPainting", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/renderer/texture/TextureAtlasSprite;getV(F)F", ordinal = 2))
+    @Inject(method = "method_72990", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/renderer/texture/TextureAtlasSprite;getV(F)F", ordinal = 2))
     private void performEdgeChecks(
             CallbackInfo ci,
             @Local(argsOnly = true, ordinal = 0) int pWidth,
@@ -124,7 +137,7 @@ public abstract class PaintingRendererMixin implements RenderRelightCounter {
     }
 
     @WrapWithCondition(
-            method = "renderPainting",
+            method = "method_72990",
             at = {
                     @At(ordinal = 8, value = "INVOKE", target = VERTEX_TARGET),
                     @At(ordinal = 9, value = "INVOKE", target = VERTEX_TARGET),
@@ -140,7 +153,7 @@ public abstract class PaintingRendererMixin implements RenderRelightCounter {
     }
 
     @WrapWithCondition(
-            method = "renderPainting",
+            method = "method_72990",
             at = {
                     @At(ordinal = 12, value = "INVOKE", target = VERTEX_TARGET),
                     @At(ordinal = 13, value = "INVOKE", target = VERTEX_TARGET),
@@ -156,7 +169,7 @@ public abstract class PaintingRendererMixin implements RenderRelightCounter {
     }
 
     @WrapWithCondition(
-            method = "renderPainting",
+            method = "method_72990",
             at = {
                     @At(ordinal = 16, value = "INVOKE", target = VERTEX_TARGET),
                     @At(ordinal = 17, value = "INVOKE", target = VERTEX_TARGET),
@@ -172,7 +185,7 @@ public abstract class PaintingRendererMixin implements RenderRelightCounter {
     }
 
     @WrapWithCondition(
-            method = "renderPainting",
+            method = "method_72990",
             at = {
                     @At(ordinal = 20, value = "INVOKE", target = VERTEX_TARGET),
                     @At(ordinal = 21, value = "INVOKE", target = VERTEX_TARGET),
@@ -188,7 +201,7 @@ public abstract class PaintingRendererMixin implements RenderRelightCounter {
     }
 
     @Redirect(
-            method = "renderPainting",
+            method = "method_72990",
             at = @At(value = "INVOKE", target = VERTEX_TARGET)
     )
     private void vertexWithSmoothLight(
@@ -200,18 +213,16 @@ public abstract class PaintingRendererMixin implements RenderRelightCounter {
             @Local(ordinal = 3) int blockY
     ) {
         if (Minecraft.useAmbientOcclusion()) {
-            int[] vertLights = vertLightsShared;
-
             int packedVertPos = (int)((g + (float) pHeight / 2.0f) * (pWidth+1) + (f + (float) pWidth / 2.0f));
-            if (vertLights[packedVertPos] != -1) {
-                n = vertLights[packedVertPos];
-            } else {
-                float xInBlock = f + (float) pWidth / 2.0f - blockX;
-                float yInBlock = g + (float) pHeight / 2.0f - blockY;
-                n = getLight(blockX, blockY, pWidth, pHeight, lightCoords, xInBlock, yInBlock);
-
-                vertLights[packedVertPos] = n;
-            }
+            //if (lightCoords[packedVertPos] != -1) {
+                n = lightCoords[packedVertPos];
+//            } else {
+//                float xInBlock = f + (float) pWidth / 2.0f - blockX;
+//                float yInBlock = g + (float) pHeight / 2.0f - blockY;
+//                n = getLight(blockX, blockY, pWidth, pHeight, lightCoords, xInBlock, yInBlock);
+//
+//                lightCoords[packedVertPos] = n;
+//            }
         }
 
         vertexConsumer.addVertex(pose, f, g, j).setColor(-1).setUv(h, i).setOverlay(OverlayTexture.NO_OVERLAY).setLight(n).setNormal(pose, (float)k, (float)l, (float)m);

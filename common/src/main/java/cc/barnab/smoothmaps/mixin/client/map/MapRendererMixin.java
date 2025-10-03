@@ -5,15 +5,16 @@ import cc.barnab.smoothmaps.client.MathUtil;
 import cc.barnab.smoothmaps.client.RenderRelightCounter;
 import com.llamalad7.mixinextras.sugar.Local;
 import com.llamalad7.mixinextras.sugar.Share;
+import com.llamalad7.mixinextras.sugar.ref.LocalBooleanRef;
 import com.llamalad7.mixinextras.sugar.ref.LocalIntRef;
+import com.llamalad7.mixinextras.sugar.ref.LocalRef;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexConsumer;
 import net.minecraft.client.Camera;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.renderer.GameRenderer;
-import net.minecraft.client.renderer.MapRenderer;
-import net.minecraft.client.renderer.MultiBufferSource;
+import net.minecraft.client.renderer.*;
 import net.minecraft.client.renderer.state.MapRenderState;
+import net.minecraft.client.renderer.texture.TextureAtlasSprite;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.world.entity.decoration.ItemFrame;
@@ -29,14 +30,9 @@ import org.spongepowered.asm.mixin.injection.Slice;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 @Mixin(MapRenderer.class)
-public class MapRendererMixin implements RenderRelightCounter {
+public abstract class MapRendererMixin implements RenderRelightCounter {
     @Unique
     boolean shouldReuseVertexLights = false;
-    @Unique
-    int[] vertexLights = new int[4];
-
-    @Unique
-    byte vertNum = 0;
 
     @Unique
     private final static int[][] vertexRotationMap = new int[][]{
@@ -44,6 +40,11 @@ public class MapRendererMixin implements RenderRelightCounter {
             {3, 2, 1, 0},
             {1, 3, 0, 2}
     };
+
+    @Unique
+    private final static float[] xPositions = { 0f, 1f, 1f, 0f };
+    @Unique
+    private final static float[] yPositions = { 1f, 1f, 0f, 0f };
 
     @Unique
     int[][][] lightLevels = new int[3][3][3];
@@ -118,7 +119,7 @@ public class MapRendererMixin implements RenderRelightCounter {
 
     @Inject(method = "render", at = @At("HEAD"))
     private void render(
-            MapRenderState mapRenderState, PoseStack poseStack, MultiBufferSource multiBufferSource, boolean bl, int i,
+            MapRenderState mapRenderState, PoseStack poseStack, SubmitNodeCollector submitNodeCollector, boolean bl, int i,
             CallbackInfo ci,
             @Share("originalLight") LocalIntRef originalLight
     ) {
@@ -150,9 +151,7 @@ public class MapRendererMixin implements RenderRelightCounter {
         if (!shouldSmoothLight)
             return;
 
-        vertNum = 0;
         originalLight.set(i);
-        vertexLights = itemFrame.getVertLights();
 
         if (shouldReuseVertexLights) {
             return;
@@ -245,76 +244,82 @@ public class MapRendererMixin implements RenderRelightCounter {
 
     @Redirect(
             method = "render",
-            at = @At(value = "INVOKE", target = "Lcom/mojang/blaze3d/vertex/VertexConsumer;addVertex(Lorg/joml/Matrix4f;FFF)Lcom/mojang/blaze3d/vertex/VertexConsumer;"),
-            slice = @Slice(
-                    from = @At(value = "INVOKE", target = "Lcom/mojang/blaze3d/vertex/VertexConsumer;addVertex(Lorg/joml/Matrix4f;FFF)Lcom/mojang/blaze3d/vertex/VertexConsumer;", ordinal = 0),
-                    to = @At(value = "INVOKE", target = "Lcom/mojang/blaze3d/vertex/VertexConsumer;addVertex(Lorg/joml/Matrix4f;FFF)Lcom/mojang/blaze3d/vertex/VertexConsumer;", ordinal = 3)
-            )
+            at = @At(value = "INVOKE", target = "Lnet/minecraft/client/renderer/SubmitNodeCollector;submitCustomGeometry(Lcom/mojang/blaze3d/vertex/PoseStack;Lnet/minecraft/client/renderer/RenderType;Lnet/minecraft/client/renderer/SubmitNodeCollector$CustomGeometryRenderer;)V", ordinal = 0)
     )
-    private VertexConsumer mapVertexSmoothLight(
-            VertexConsumer instance, Matrix4f matrix4f, float f, float g, float h,
-            @Local(ordinal = 0, argsOnly = true) boolean bl,
-            @Local(ordinal = 0, argsOnly = true) MapRenderState mapRenderState,
-            @Local(ordinal = 0, argsOnly = true) LocalIntRef light
+    private void submitMapGeometry(
+            SubmitNodeCollector instance, PoseStack poseStack, RenderType renderType, SubmitNodeCollector.CustomGeometryRenderer customGeometryRenderer,
+            @Local(ordinal = 0, argsOnly = true) int light,
+            @Local(argsOnly = true) MapRenderState mapRenderState
     ) {
-        // Don't smooth light held maps or glow frames
+        int[] lights = { light, light, light, light };
+
         if (shouldSmoothLight) {
-            float xInBlock = switch(mapRenderState.rotation()) {
-                case 0, 4 -> f / 128.0f;
-                case 1, 5 -> 1.0f - g / 128.0f;
-                case 2, 6 -> 1.0f - f / 128.0f;
-                case 3, 7 -> g / 128.0f;
-                default -> 0.0f;
-            };
+            int[] vertexLights = mapRenderState.getItemFrame().getVertLights();
 
-            float yInBlock = switch(mapRenderState.rotation()) {
-                case 0, 4 -> g / 128.0f;
-                case 1, 5 -> f / 128.0f;
-                case 2, 6 -> 1.0f - g / 128.0f;
-                case 3, 7 -> 1.0f - f / 128.0f;
-                default -> 0.0f;
-            };
+            for (int i = 0; i < 4; i++) {
+                int rotatedVertNum = switch (mapRenderState.rotation()) {
+                    default -> i;
+                    case 1, 5 -> vertexRotationMap[0][i];
+                    case 2, 6 -> vertexRotationMap[1][i];
+                    case 3, 7 -> vertexRotationMap[2][i];
+                };
 
-            int rotatedVertNum = switch(mapRenderState.rotation()) {
-                default -> vertNum;
-                case 1, 5 -> vertexRotationMap[0][vertNum];
-                case 2, 6 -> vertexRotationMap[1][vertNum];
-                case 3, 7 -> vertexRotationMap[2][vertNum];
-            };
+                if (!shouldReuseVertexLights) {
+                    float f = xPositions[i];
+                    float g = yPositions[i];
 
-            if (shouldReuseVertexLights) {
-                light.set(vertexLights[rotatedVertNum]);
-            } else {
-                int lightVal = getLight(lightLevels, xInBlock, yInBlock, mapRenderState.direction());
-                vertexLights[rotatedVertNum] = lightVal;
-                light.set(lightVal);
+                    float xInBlock = switch(mapRenderState.rotation()) {
+                        case 0, 4 -> f;
+                        case 1, 5 -> 1.0f - g;
+                        case 2, 6 -> 1.0f - f;
+                        case 3, 7 -> g;
+                        default -> 0.0f;
+                    };
+
+                    float yInBlock = switch(mapRenderState.rotation()) {
+                        case 0, 4 -> g;
+                        case 1, 5 -> f;
+                        case 2, 6 -> 1.0f - g;
+                        case 3, 7 -> 1.0f - f;
+                        default -> 0.0f;
+                    };
+
+                    int lightVal = getLight(lightLevels, xInBlock, yInBlock, mapRenderState.direction());
+                    vertexLights[rotatedVertNum] = lightVal;
+                }
+
+                lights[i] = vertexLights[rotatedVertNum];
             }
 
-            vertNum++;
-
-            if (vertNum == 3 && !shouldReuseVertexLights)
+            if (!shouldReuseVertexLights)
                 mapRenderState.getItemFrame().setVertLights(vertexLights);
         }
 
-        return instance.addVertex(matrix4f, f, g, h);
+        instance.submitCustomGeometry(poseStack, renderType, (pose, vertexConsumer) -> {
+            vertexConsumer.addVertex(pose, 0.0F, 128.0F, -0.01F).setColor(-1).setUv(0.0F, 1.0F).setLight(lights[0]);
+            vertexConsumer.addVertex(pose, 128.0F, 128.0F, -0.01F).setColor(-1).setUv(1.0F, 1.0F).setLight(lights[1]);
+            vertexConsumer.addVertex(pose, 128.0F, 0.0F, -0.01F).setColor(-1).setUv(1.0F, 0.0F).setLight(lights[2]);
+            vertexConsumer.addVertex(pose, 0.0F, 0.0F, -0.01F).setColor(-1).setUv(0.0F, 0.0F).setLight(lights[3]);
+        });
     }
 
-    @Inject(
-            method = "render",
-            at = @At(value = "INVOKE", target = "Lcom/mojang/blaze3d/vertex/VertexConsumer;addVertex(Lorg/joml/Matrix4f;FFF)Lcom/mojang/blaze3d/vertex/VertexConsumer;", ordinal = 4)
-    )
-    private void decorationsNormalLighting(
-            MapRenderState mapRenderState, PoseStack poseStack, MultiBufferSource multiBufferSource, boolean bl, int i,
-            CallbackInfo ci,
-            @Local(ordinal = 0, argsOnly = true) LocalIntRef light,
-            @Share("originalLight") LocalIntRef originalLight
-    ) {
-        // Don't smooth light held maps or glow frames
-        if (!shouldSmoothLight)
-            return;
-
-        light.set(originalLight.get());
-    }
+//    @Inject(
+//            method = "method_72918",
+//            at = @At(value = "INVOKE", target = "Lcom/mojang/blaze3d/vertex/VertexConsumer;addVertex(Lcom/mojang/blaze3d/vertex/PoseStack$Pose;FFF)Lcom/mojang/blaze3d/vertex/VertexConsumer;", ordinal = 0)
+//    )
+//    private static void decorationsNormalLighting(
+//            float f, TextureAtlasSprite textureAtlasSprite, int i, PoseStack.Pose pose, VertexConsumer vertexConsumer,
+//            CallbackInfo ci,
+//            @Local(ordinal = 0, argsOnly = true) LocalIntRef light,
+//            @Share("shouldSmoothLight") LocalBooleanRef shouldSmoothLight,
+//            @Share("originalLight") LocalIntRef originalLight
+//    ) {
+//        // Don't smooth light held maps or glow frames
+//        if (!shouldSmoothLight.get())
+//            return;
+//
+//        light.set(originalLight.get());
+//    }
 
     @Unique
     private static int getLight(int[][][] blockLights, float x, float y, Direction direction) {

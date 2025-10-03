@@ -4,18 +4,18 @@
   "compatibilityLevel": "JAVA_21",
   "minVersion": "0.8",
   "client": [
-    "DebugScreenOverlayMixin",
+    "DebugScreenEntriesMixin",
     "GameRendererMixin",
     "LevelLightEngineMixin",
     "LightTextureMixin",
+    "map.ItemFrameMixin",
     "map.ItemFrameRendererMixin",
     "map.ItemFrameRenderStateMixin",
     "map.MapRendererMixin",
     "map.MapRenderStateMixin",
-    "map.ItemFrameMixin",
+    "painting.PaintingMixin",
     "painting.PaintingRendererMixin",
-    "painting.PaintingRenderStateMixin",
-    "painting.PaintingMixin"
+    "painting.PaintingRenderStateMixin"
   ],
   "mixins": [
   ],
