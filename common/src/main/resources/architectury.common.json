@@ -9,6 +9,7 @@
     "net/minecraft/class_10049": ["cc/barnab/smoothmaps/client/PaintingStateAccessor"],
     "net/minecraft/class_1534": ["cc/barnab/smoothmaps/client/PaintingLightAccessor"],
     "net/minecraft/class_10040": ["cc/barnab/smoothmaps/client/ItemFrameStateAccessor"],
-    "net/minecraft/class_1533": ["cc/barnab/smoothmaps/client/ItemFrameLightAccessor"]
+    "net/minecraft/class_1533": ["cc/barnab/smoothmaps/client/ItemFrameLightAccessor"],
+    "net/minecraft/class_10093$class_331": ["cc/barnab/smoothmaps/client/MapInstanceDirty"]
   }
 }

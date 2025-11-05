@@ -10,3 +10,10 @@ accessible field net/minecraft/client/renderer/GameRenderer fovModifier F
 accessible field net/minecraft/client/renderer/GameRenderer oldFovModifier F
 
 accessible field net/minecraft/client/renderer/entity/EntityRenderDispatcher renderers Ljava/util/Map;
+
+accessible class net/minecraft/client/resources/MapTextureManager$MapInstance
+accessible field net/minecraft/client/renderer/texture/DynamicTexture pixels Lcom/mojang/blaze3d/platform/NativeImage;
+accessible field net/minecraft/client/renderer/texture/AbstractTexture texture Lcom/mojang/blaze3d/textures/GpuTexture;
+
+accessible method net/minecraft/client/resources/MapTextureManager getOrCreateMapInstance (Lnet/minecraft/world/level/saveddata/maps/MapId;Lnet/minecraft/world/level/saveddata/maps/MapItemSavedData;)Lnet/minecraft/client/resources/MapTextureManager$MapInstance;
+accessible method net/minecraft/client/resources/MapTextureManager$MapInstance forceUpload ()V
