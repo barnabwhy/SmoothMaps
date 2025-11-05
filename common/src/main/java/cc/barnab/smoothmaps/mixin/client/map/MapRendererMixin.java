@@ -303,24 +303,6 @@ public abstract class MapRendererMixin implements RenderRelightCounter {
         });
     }
 
-//    @Inject(
-//            method = "method_72918",
-//            at = @At(value = "INVOKE", target = "Lcom/mojang/blaze3d/vertex/VertexConsumer;addVertex(Lcom/mojang/blaze3d/vertex/PoseStack$Pose;FFF)Lcom/mojang/blaze3d/vertex/VertexConsumer;", ordinal = 0)
-//    )
-//    private static void decorationsNormalLighting(
-//            float f, TextureAtlasSprite textureAtlasSprite, int i, PoseStack.Pose pose, VertexConsumer vertexConsumer,
-//            CallbackInfo ci,
-//            @Local(ordinal = 0, argsOnly = true) LocalIntRef light,
-//            @Share("shouldSmoothLight") LocalBooleanRef shouldSmoothLight,
-//            @Share("originalLight") LocalIntRef originalLight
-//    ) {
-//        // Don't smooth light held maps or glow frames
-//        if (!shouldSmoothLight.get())
-//            return;
-//
-//        light.set(originalLight.get());
-//    }
-
     @Unique
     private static int getLight(int[][][] blockLights, float x, float y, Direction direction) {
         int light = blockLights[1][1][1];
