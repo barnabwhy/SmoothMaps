@@ -14,7 +14,7 @@
 
   "license": "MIT",
   "icon": "assets/smoothmaps/icon.png",
-  "environment": "client",
+  "environment": "*",
   "entrypoints": {
     "main": [
       "cc.barnab.smoothmaps.fabric.SmoothMapsFabric"
@@ -25,7 +25,7 @@
   "mixins": [
     {
       "config": "smoothmaps.mixins.json",
-      "environment": "client"
+      "environment": "*"
     }
   ],
   "custom": {

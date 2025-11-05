@@ -18,6 +18,7 @@
     "painting.PaintingRenderStateMixin"
   ],
   "mixins": [
+    "map.drawing.MapItemMixin"
   ],
   "injectors": {
     "defaultRequire": 1
