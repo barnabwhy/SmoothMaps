@@ -1,6 +1,7 @@
 package cc.barnab.smoothmaps.mixin.client.map;
 
 import cc.barnab.smoothmaps.client.MapInstanceDirty;
+import cc.barnab.smoothmaps.compat.ImmediatelyFastCompat;
 import com.mojang.blaze3d.platform.NativeImage;
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.logging.LogUtils;
@@ -45,6 +46,10 @@ public abstract class MapInstanceMixin implements MapInstanceDirty {
 
     @Inject(method = "updateTextureIfNeeded", at = @At("HEAD"), cancellable = true)
     private void writeTexture(CallbackInfo ci) {
+        // Skip this if ImmediatelyFast is loaded
+        if (ImmediatelyFastCompat.isAvailable())
+            return;
+
         if (requiresUpload) {
             if (isDirty) {
                 NativeImage nativeimage = texture.getPixels();

@@ -3,33 +3,28 @@ package cc.barnab.smoothmaps.mixin.client.map;
 import cc.barnab.smoothmaps.client.LightUpdateAccessor;
 import cc.barnab.smoothmaps.client.MathUtil;
 import cc.barnab.smoothmaps.client.RenderRelightCounter;
+import cc.barnab.smoothmaps.compat.ImmediatelyFastCompat;
+import com.llamalad7.mixinextras.injector.v2.WrapWithCondition;
 import com.llamalad7.mixinextras.sugar.Local;
 import com.llamalad7.mixinextras.sugar.Share;
-import com.llamalad7.mixinextras.sugar.ref.LocalBooleanRef;
 import com.llamalad7.mixinextras.sugar.ref.LocalIntRef;
-import com.llamalad7.mixinextras.sugar.ref.LocalRef;
 import com.mojang.blaze3d.vertex.PoseStack;
-import com.mojang.blaze3d.vertex.VertexConsumer;
 import net.minecraft.client.Camera;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.*;
 import net.minecraft.client.renderer.state.MapRenderState;
-import net.minecraft.client.renderer.texture.TextureAtlasSprite;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.world.entity.decoration.ItemFrame;
 import net.minecraft.world.level.lighting.LevelLightEngine;
-import org.joml.Matrix4f;
 import org.joml.Vector3f;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
-import org.spongepowered.asm.mixin.injection.Redirect;
-import org.spongepowered.asm.mixin.injection.Slice;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
-@Mixin(MapRenderer.class)
+@Mixin(value = MapRenderer.class, priority = 1001)
 public abstract class MapRendererMixin implements RenderRelightCounter {
     @Unique
     boolean shouldReuseVertexLights = false;
@@ -242,57 +237,77 @@ public abstract class MapRendererMixin implements RenderRelightCounter {
         }
     }
 
-    @Redirect(
+    @WrapWithCondition(
             method = "render",
             at = @At(value = "INVOKE", target = "Lnet/minecraft/client/renderer/SubmitNodeCollector;submitCustomGeometry(Lcom/mojang/blaze3d/vertex/PoseStack;Lnet/minecraft/client/renderer/RenderType;Lnet/minecraft/client/renderer/SubmitNodeCollector$CustomGeometryRenderer;)V", ordinal = 0)
     )
-    private void submitMapGeometry(
-            SubmitNodeCollector instance, PoseStack poseStack, RenderType renderType, SubmitNodeCollector.CustomGeometryRenderer customGeometryRenderer,
-            @Local(ordinal = 0, argsOnly = true) int light,
-            @Local(argsOnly = true) MapRenderState mapRenderState
+    private boolean submitMapGeometry(
+            SubmitNodeCollector instance, PoseStack poseStack, RenderType renderType, SubmitNodeCollector.CustomGeometryRenderer customGeometryRenderer, @Local(ordinal = 0, argsOnly = true) int light, @Local(argsOnly = true) MapRenderState mapRenderState
     ) {
+        if (!shouldSmoothLight)
+            return true;
+
         int[] lights = { light, light, light, light };
 
-        if (shouldSmoothLight) {
-            int[] vertexLights = mapRenderState.getItemFrame().getVertLights();
+        int[] vertexLights = mapRenderState.getItemFrame().getVertLights();
 
-            for (int i = 0; i < 4; i++) {
-                int rotatedVertNum = switch (mapRenderState.rotation()) {
-                    default -> i;
-                    case 1, 5 -> vertexRotationMap[0][i];
-                    case 2, 6 -> vertexRotationMap[1][i];
-                    case 3, 7 -> vertexRotationMap[2][i];
+        for (int i = 0; i < 4; i++) {
+            int rotatedVertNum = switch (mapRenderState.rotation()) {
+                default -> i;
+                case 1, 5 -> vertexRotationMap[0][i];
+                case 2, 6 -> vertexRotationMap[1][i];
+                case 3, 7 -> vertexRotationMap[2][i];
+            };
+
+            if (!shouldReuseVertexLights) {
+                float f = xPositions[i];
+                float g = yPositions[i];
+
+                float xInBlock = switch(mapRenderState.rotation()) {
+                    case 0, 4 -> f;
+                    case 1, 5 -> 1.0f - g;
+                    case 2, 6 -> 1.0f - f;
+                    case 3, 7 -> g;
+                    default -> 0.0f;
                 };
 
-                if (!shouldReuseVertexLights) {
-                    float f = xPositions[i];
-                    float g = yPositions[i];
+                float yInBlock = switch(mapRenderState.rotation()) {
+                    case 0, 4 -> g;
+                    case 1, 5 -> f;
+                    case 2, 6 -> 1.0f - g;
+                    case 3, 7 -> 1.0f - f;
+                    default -> 0.0f;
+                };
 
-                    float xInBlock = switch(mapRenderState.rotation()) {
-                        case 0, 4 -> f;
-                        case 1, 5 -> 1.0f - g;
-                        case 2, 6 -> 1.0f - f;
-                        case 3, 7 -> g;
-                        default -> 0.0f;
-                    };
-
-                    float yInBlock = switch(mapRenderState.rotation()) {
-                        case 0, 4 -> g;
-                        case 1, 5 -> f;
-                        case 2, 6 -> 1.0f - g;
-                        case 3, 7 -> 1.0f - f;
-                        default -> 0.0f;
-                    };
-
-                    int lightVal = getLight(lightLevels, xInBlock, yInBlock, mapRenderState.direction());
-                    vertexLights[rotatedVertNum] = lightVal;
-                }
-
-                lights[i] = vertexLights[rotatedVertNum];
+                int lightVal = getLight(lightLevels, xInBlock, yInBlock, mapRenderState.direction());
+                vertexLights[rotatedVertNum] = lightVal;
             }
 
-            if (!shouldReuseVertexLights)
-                mapRenderState.getItemFrame().setVertLights(vertexLights);
+            lights[i] = vertexLights[rotatedVertNum];
+        }
+
+        if (!shouldReuseVertexLights)
+            mapRenderState.getItemFrame().setVertLights(vertexLights);
+
+        // ImmediatelyFast messes with the UVs of maps by putting them into an atlas, lovely
+        // We need to mimic its behaviour otherwise our map will render the entire map atlas :(
+        if (ImmediatelyFastCompat.isAvailable()) {
+            float[] uvs = ImmediatelyFastCompat.getUVs(mapRenderState);
+            if (uvs != null) {
+                float u1 = uvs[0];
+                float v1 = uvs[1];
+                float u2 = uvs[2];
+                float v2 = uvs[3];
+
+                instance.submitCustomGeometry(poseStack, renderType, (pose, vertexConsumer) -> {
+                    vertexConsumer.addVertex(pose, 0.0F, 128.0F, -0.01F).setColor(-1).setUv(u1, v2).setLight(lights[0]);
+                    vertexConsumer.addVertex(pose, 128.0F, 128.0F, -0.01F).setColor(-1).setUv(u2, v2).setLight(lights[1]);
+                    vertexConsumer.addVertex(pose, 128.0F, 0.0F, -0.01F).setColor(-1).setUv(u2, v1).setLight(lights[2]);
+                    vertexConsumer.addVertex(pose, 0.0F, 0.0F, -0.01F).setColor(-1).setUv(u1, v1).setLight(lights[3]);
+                });
+
+                return false;
+            }
         }
 
         instance.submitCustomGeometry(poseStack, renderType, (pose, vertexConsumer) -> {
@@ -301,6 +316,7 @@ public abstract class MapRendererMixin implements RenderRelightCounter {
             vertexConsumer.addVertex(pose, 128.0F, 0.0F, -0.01F).setColor(-1).setUv(1.0F, 0.0F).setLight(lights[2]);
             vertexConsumer.addVertex(pose, 0.0F, 0.0F, -0.01F).setColor(-1).setUv(0.0F, 0.0F).setLight(lights[3]);
         });
+        return false;
     }
 
     @Unique
