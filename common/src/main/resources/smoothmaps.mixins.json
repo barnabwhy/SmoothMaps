@@ -1,23 +1,23 @@
 {
   "required": true,
-  "package": "cc.barnab.smoothmaps.mixin.client",
+  "package": "cc.barnab.smoothmaps.mixin",
   "compatibilityLevel": "JAVA_21",
   "minVersion": "0.8",
   "client": [
-    "DebugScreenEntriesMixin",
-    "GameRendererMixin",
-    "LevelLightEngineMixin",
-    "LightTextureMixin",
-    "map.ClientPacketListenerMixin",
-    "map.ItemFrameMixin",
-    "map.ItemFrameRendererMixin",
-    "map.ItemFrameRenderStateMixin",
-    "map.MapInstanceMixin",
-    "map.MapRendererMixin",
-    "map.MapRenderStateMixin",
-    "painting.PaintingMixin",
-    "painting.PaintingRendererMixin",
-    "painting.PaintingRenderStateMixin"
+    "client.DebugScreenEntriesMixin",
+    "client.GameRendererMixin",
+    "client.LevelLightEngineMixin",
+    "client.LightTextureMixin",
+    "client.map.ClientPacketListenerMixin",
+    "client.map.ItemFrameMixin",
+    "client.map.ItemFrameRendererMixin",
+    "client.map.ItemFrameRenderStateMixin",
+    "client.map.MapInstanceMixin",
+    "client.map.MapRendererMixin",
+    "client.map.MapRenderStateMixin",
+    "client.painting.PaintingMixin",
+    "client.painting.PaintingRendererMixin",
+    "client.painting.PaintingRenderStateMixin"
   ],
   "mixins": [
     "map.drawing.MapItemMixin"

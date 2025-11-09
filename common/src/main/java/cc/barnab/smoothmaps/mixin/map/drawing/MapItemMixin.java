@@ -1,4 +1,4 @@
-package cc.barnab.smoothmaps.mixin.client.map.drawing;
+package cc.barnab.smoothmaps.mixin.map.drawing;
 
 import com.google.common.collect.ImmutableMultiset;
 import com.google.common.collect.Multiset;
@@ -41,8 +41,8 @@ public class MapItemMixin {
     )
     private void shortCircuitWater(
             Level level, Entity entity, MapItemSavedData mapItemSavedData, CallbackInfo ci,
-            @Local(name = "x") LocalIntRef x, @Local(name = "t") LocalIntRef t,
-            @Local(name = "levelChunk") LevelChunk levelChunk, @Local(name = "mutableBlockPos") BlockPos.MutableBlockPos mutableBlockPos
+            @Local(name = "x", ordinal = 15) LocalIntRef x, @Local(name = "t", ordinal = 11) LocalIntRef t,
+            @Local(name = "levelChunk", ordinal = 0) LevelChunk levelChunk, @Local(name = "mutableBlockPos", ordinal = 0) BlockPos.MutableBlockPos mutableBlockPos
     ) {
         // This should behave identically to the existing behaviour but
         // will be considerably faster on maps of oceans and rivers
@@ -73,7 +73,7 @@ public class MapItemMixin {
 
     /**
      * Faster max count method.
-     * The method Mojang use copiess the multiset to an array
+     * The method Mojang use copies the multiset to an array
      * and then sorts it, which wastes a bunch of processing
      * time since we only want the highest count value.
      */
@@ -86,7 +86,7 @@ public class MapItemMixin {
             remap = false
         )
     )
-    private <T> T getMapColor(Iterable<? extends T> iterable, T defaultValue, @Local Multiset<MapColor> multiset, @Local(name = "i") int i) {
+    private <T> T getMapColor(Iterable<? extends T> iterable, T defaultValue, @Local Multiset<MapColor> multiset, @Local(name = "i", ordinal = 0) int i) {
         int maxCount = -1;
         int threshold = i*i/2;
         MapColor mapColor = MapColor.NONE;
