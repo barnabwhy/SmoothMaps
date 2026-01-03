@@ -11,7 +11,7 @@ accessible field net/minecraft/client/renderer/GameRenderer oldFovModifier F
 
 accessible field net/minecraft/client/renderer/entity/EntityRenderDispatcher renderers Ljava/util/Map;
 
-accessible method net/minecraft/client/gui/components/debug/DebugScreenEntries register (Ljava/lang/String;Lnet/minecraft/client/gui/components/debug/DebugScreenEntry;)Lnet/minecraft/resources/ResourceLocation;
+accessible method net/minecraft/client/gui/components/debug/DebugScreenEntries register (Ljava/lang/String;Lnet/minecraft/client/gui/components/debug/DebugScreenEntry;)Lnet/minecraft/resources/Identifier;
 
 accessible class net/minecraft/client/resources/MapTextureManager$MapInstance
 accessible field net/minecraft/client/renderer/texture/DynamicTexture pixels Lcom/mojang/blaze3d/platform/NativeImage;
