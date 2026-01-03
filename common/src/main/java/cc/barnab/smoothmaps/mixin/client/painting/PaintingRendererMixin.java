@@ -1,6 +1,9 @@
 package cc.barnab.smoothmaps.mixin.client.painting;
 
-import cc.barnab.smoothmaps.client.*;
+import cc.barnab.smoothmaps.client.LightUpdateAccessor;
+import cc.barnab.smoothmaps.client.MathUtil;
+import cc.barnab.smoothmaps.client.RenderRelightCounter;
+import com.llamalad7.mixinextras.expression.Expression;
 import com.llamalad7.mixinextras.injector.v2.WrapWithCondition;
 import com.llamalad7.mixinextras.sugar.Local;
 import com.llamalad7.mixinextras.sugar.Share;
@@ -9,15 +12,18 @@ import com.llamalad7.mixinextras.sugar.ref.LocalRef;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexConsumer;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.renderer.RenderType;
-import net.minecraft.client.renderer.SubmitNodeCollector;
+import net.minecraft.client.renderer.LevelRenderer;
 import net.minecraft.client.renderer.entity.PaintingRenderer;
 import net.minecraft.client.renderer.entity.state.PaintingRenderState;
 import net.minecraft.client.renderer.texture.OverlayTexture;
-import net.minecraft.client.renderer.texture.TextureAtlasSprite;
+import net.minecraft.client.renderer.texture.TextureAtlas;
 import net.minecraft.core.BlockPos;
-import net.minecraft.world.entity.decoration.Painting;
+import net.minecraft.world.entity.decoration.painting.Painting;
+import net.minecraft.world.entity.decoration.painting.PaintingVariant;
+import net.minecraft.world.level.BlockAndTintGetter;
+import net.minecraft.world.level.Level;
 import net.minecraft.world.level.lighting.LevelLightEngine;
+import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.Unique;
@@ -26,27 +32,33 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.Redirect;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
-import java.util.Arrays;
-
 /**
  * Purpose: Prevents rendering of unnecessary painting vertices & Adds smooth lighting
  */
 
 @Mixin(PaintingRenderer.class)
 public abstract class PaintingRendererMixin implements RenderRelightCounter {
-    @Shadow protected abstract void renderPainting(PoseStack arg, SubmitNodeCollector arg2, RenderType arg3, int[] is, int i, int j, TextureAtlasSprite arg4, TextureAtlasSprite arg5);
 
+    @Shadow
+    @Final
+    private TextureAtlas paintingsAtlas;
     @Unique
     private static final String VERTEX_TARGET = "Lnet/minecraft/client/renderer/entity/PaintingRenderer;vertex(Lcom/mojang/blaze3d/vertex/PoseStack$Pose;Lcom/mojang/blaze3d/vertex/VertexConsumer;FFFFFIIII)V";
 
     @Unique
     private int numRendered = 0;
     @Unique
+    private int numSmoothLit = 0;
+    @Unique
     private int numRelit = 0;
 
     @Override
     public int getNumRendered() {
         return numRendered;
+    }
+    @Override
+    public int getNumSmoothLit() {
+        return numSmoothLit;
     }
     @Override
     public int getNumRelit() {
@@ -56,44 +68,44 @@ public abstract class PaintingRendererMixin implements RenderRelightCounter {
     @Override
     public void resetCounters() {
         numRendered = 0;
+        numSmoothLit = 0;
         numRelit = 0;
     }
 
-    @Inject(method = "extractRenderState(Lnet/minecraft/world/entity/decoration/Painting;Lnet/minecraft/client/renderer/entity/state/PaintingRenderState;F)V", at = @At("TAIL"))
-    public void extractRenderState(Painting painting, PaintingRenderState paintingRenderState, float f, CallbackInfo ci) {
-        paintingRenderState.setPainting(painting);
-    }
-
     @Inject(
-            method = "extractRenderState(Lnet/minecraft/world/entity/decoration/Painting;Lnet/minecraft/client/renderer/entity/state/PaintingRenderState;F)V",
+            method = "extractRenderState(Lnet/minecraft/world/entity/decoration/painting/Painting;Lnet/minecraft/client/renderer/entity/state/PaintingRenderState;F)V",
             at = @At(value = "TAIL")
     )
     private void lightPainting(Painting painting, PaintingRenderState paintingRenderState, float f, CallbackInfo ci) {
         numRendered++;
 
+        paintingRenderState.setPainting(painting);
+
         if (Minecraft.useAmbientOcclusion()) {
+            numSmoothLit++;
+
             assert paintingRenderState.variant != null;
 
             int[] vertLights = painting.getVertLights();
 
             BlockPos blockPos = BlockPos.containing(paintingRenderState.x, paintingRenderState.y, paintingRenderState.z);
 
-            assert Minecraft.getInstance().level != null;
-            LevelLightEngine lightEngine = Minecraft.getInstance().level.getLightEngine();
+            LevelLightEngine lightEngine = painting.level().getLightEngine();
+
+            // Clear vert lights array if the size of the painting has changed
+            int pWidth = paintingRenderState.variant.width();
+            int pHeight = paintingRenderState.variant.height();
+            int frontFaceVertCount = (pWidth + 1) * (pHeight + 1);
 
             boolean shouldRelight = ((LightUpdateAccessor)lightEngine).getLastUpdated() > painting.getLastUpdated()
                     || !blockPos.equals(painting.getLastBlockPos())
                     || !painting.getDirection().equals(painting.getLastDirection())
-                    || vertLights == null;
+                    || vertLights == null
+                    || vertLights.length < frontFaceVertCount;
 
             if (shouldRelight) {
-                int pWidth = paintingRenderState.variant.width();
-                int pHeight = paintingRenderState.variant.height();
-
-                int frontFaceVertCount = (pWidth + 1) * (pHeight + 1);
                 if (vertLights == null || vertLights.length < frontFaceVertCount)
                     vertLights = new int[frontFaceVertCount];
-
 
                 for (int v = 0; v < frontFaceVertCount; v++) {
                     int blockX = Math.min(v % (pWidth + 1), pWidth-1);

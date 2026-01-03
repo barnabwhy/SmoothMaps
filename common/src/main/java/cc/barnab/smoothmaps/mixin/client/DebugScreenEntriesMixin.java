@@ -3,7 +3,7 @@ package cc.barnab.smoothmaps.mixin.client;
 import cc.barnab.smoothmaps.client.SmoothMapsDebugEntry;
 import net.minecraft.client.gui.components.debug.DebugScreenEntries;
 import net.minecraft.client.gui.components.debug.DebugScreenEntry;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.Identifier;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.Unique;
@@ -12,11 +12,11 @@ import org.spongepowered.asm.mixin.Unique;
 public abstract class DebugScreenEntriesMixin {
 
     @Shadow
-    private static ResourceLocation register(ResourceLocation arg, DebugScreenEntry arg2) {
+    private static Identifier register(Identifier arg, DebugScreenEntry arg2) {
         return null;
     }
 
     @Unique
-    private static final ResourceLocation SMOOTHMAPS_STATS =
-            register(ResourceLocation.fromNamespaceAndPath("smoothmaps", "stats"), new SmoothMapsDebugEntry());
+    private static final Identifier SMOOTHMAPS_STATS =
+            register(Identifier.fromNamespaceAndPath("smoothmaps", "stats"), new SmoothMapsDebugEntry());
 }

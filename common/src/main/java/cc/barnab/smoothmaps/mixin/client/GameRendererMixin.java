@@ -1,13 +1,10 @@
 package cc.barnab.smoothmaps.mixin.client;
 
 import cc.barnab.smoothmaps.client.GameRenderTimeGetter;
-import cc.barnab.smoothmaps.mixin.client.map.MapRendererMixin;
-import cc.barnab.smoothmaps.mixin.client.painting.PaintingRendererMixin;
-import net.minecraft.Util;
+import net.minecraft.util.Util;
 import net.minecraft.client.DeltaTracker;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.GameRenderer;
-import net.minecraft.client.renderer.MapRenderer;
 import net.minecraft.client.renderer.entity.PaintingRenderer;
 import net.minecraft.world.entity.EntityType;
 import org.spongepowered.asm.mixin.Mixin;

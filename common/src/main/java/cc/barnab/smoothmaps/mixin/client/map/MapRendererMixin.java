@@ -12,12 +12,13 @@ import com.mojang.blaze3d.vertex.PoseStack;
 import net.minecraft.client.Camera;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.*;
+import net.minecraft.client.renderer.rendertype.RenderType;
 import net.minecraft.client.renderer.state.MapRenderState;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.world.entity.decoration.ItemFrame;
 import net.minecraft.world.level.lighting.LevelLightEngine;
-import org.joml.Vector3f;
+import org.joml.Vector3fc;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
@@ -50,11 +51,17 @@ public abstract class MapRendererMixin implements RenderRelightCounter {
     @Unique
     private int numRendered = 0;
     @Unique
+    private int numSmoothLit = 0;
+    @Unique
     private int numRelit = 0;
 
     @Override
     public int getNumRendered() {
         return numRendered;
+    }
+    @Override
+    public int getNumSmoothLit() {
+        return numSmoothLit;
     }
     @Override
     public int getNumRelit() {
@@ -64,6 +71,7 @@ public abstract class MapRendererMixin implements RenderRelightCounter {
     @Override
     public void resetCounters() {
         numRendered = 0;
+        numSmoothLit = 0;
         numRelit = 0;
     }
 
@@ -83,23 +91,18 @@ public abstract class MapRendererMixin implements RenderRelightCounter {
         // Optimisations to disable smooth lighting in situations you wouldn't see it
         GameRenderer gameRenderer = Minecraft.getInstance().gameRenderer;
         Camera mainCamera = gameRenderer.getMainCamera();
-        Vector3f camLook = mainCamera.getLookVector();
+        Vector3fc camLook = mainCamera.forwardVector();
 
         // Is camera behind frame
         Direction.Axis axis = mapRenderState.direction().getAxis();
         Direction.AxisDirection axisDir = mapRenderState.direction().getAxisDirection();
         boolean isCamBehind = switch (axis) {
-            case X -> (mapRenderState.getBlockPos().getX() - mainCamera.getPosition().x) * axisDir.getStep() > 1f;
-            case Y -> (mapRenderState.getBlockPos().getY() - mainCamera.getPosition().y) * axisDir.getStep() > 1f;
-            case Z -> (mapRenderState.getBlockPos().getZ() - mainCamera.getPosition().z) * axisDir.getStep() > 1f;
+            case X -> (mapRenderState.getBlockPos().getX() - mainCamera.position().x) * axisDir.getStep() > 1f;
+            case Y -> (mapRenderState.getBlockPos().getY() - mainCamera.position().y) * axisDir.getStep() > 1f;
+            case Z -> (mapRenderState.getBlockPos().getZ() - mainCamera.position().z) * axisDir.getStep() > 1f;
         };
 
         if (isCamBehind)
-            return false;
-
-        // Is camera >128 blocks from frame
-        float distSqr = (float) mapRenderState.getBlockPos().distSqr(mainCamera.getBlockPosition());
-        if (distSqr > 128f * 128f)
             return false;
 
         // Is camera facing away from frame
@@ -118,6 +121,17 @@ public abstract class MapRendererMixin implements RenderRelightCounter {
             CallbackInfo ci,
             @Share("originalLight") LocalIntRef originalLight
     ) {
+        // Skip all this if the map isn't in an item frame
+        // Also prevents crash if a mod doesn't respect in frame bool
+        // Reported by craftish37 (https://github.com/barnabwhy/SmoothMaps/issues/1)
+        ItemFrame itemFrame = mapRenderState.getItemFrame();
+        if (!bl || itemFrame == null) {
+            shouldReuseVertexLights = false;
+            shouldSmoothLight = false;
+            return;
+        }
+
+        // Call this after because we only want to count those in item frames
         numRendered++;
 
         // Check if we can reuse vertex lights
@@ -125,16 +139,6 @@ public abstract class MapRendererMixin implements RenderRelightCounter {
         LevelLightEngine lightEngine = Minecraft.getInstance().level.getLightEngine();
 
         BlockPos blockPos = mapRenderState.getBlockPos();
-        ItemFrame itemFrame = mapRenderState.getItemFrame();
-
-        // Skip all this if the map isn't in an item frame
-        // Also prevents crash if a mod doesn't respect in frame bool
-        // Reported by craftish37 (https://github.com/barnabwhy/SmoothMaps/issues/1)
-        if (!bl || itemFrame == null) {
-            shouldReuseVertexLights = false;
-            shouldSmoothLight = false;
-            return;
-        }
 
         shouldReuseVertexLights = ((LightUpdateAccessor)lightEngine).getLastUpdated() <= itemFrame.getLastUpdated()
                 && blockPos.equals(itemFrame.getLastBlockPos())
@@ -145,6 +149,8 @@ public abstract class MapRendererMixin implements RenderRelightCounter {
         shouldSmoothLight = shouldSmoothLight(mapRenderState, shouldReuseVertexLights);
         if (!shouldSmoothLight)
             return;
+
+        numSmoothLit++;
 
         originalLight.set(i);
 
@@ -239,7 +245,7 @@ public abstract class MapRendererMixin implements RenderRelightCounter {
 
     @WrapWithCondition(
             method = "render",
-            at = @At(value = "INVOKE", target = "Lnet/minecraft/client/renderer/SubmitNodeCollector;submitCustomGeometry(Lcom/mojang/blaze3d/vertex/PoseStack;Lnet/minecraft/client/renderer/RenderType;Lnet/minecraft/client/renderer/SubmitNodeCollector$CustomGeometryRenderer;)V", ordinal = 0)
+            at = @At(value = "INVOKE", target = "Lnet/minecraft/client/renderer/SubmitNodeCollector;submitCustomGeometry(Lcom/mojang/blaze3d/vertex/PoseStack;Lnet/minecraft/client/renderer/rendertype/RenderType;Lnet/minecraft/client/renderer/SubmitNodeCollector$CustomGeometryRenderer;)V", ordinal = 0)
     )
     private boolean submitMapGeometry(
             SubmitNodeCollector instance, PoseStack poseStack, RenderType renderType, SubmitNodeCollector.CustomGeometryRenderer customGeometryRenderer, @Local(ordinal = 0, argsOnly = true) int light, @Local(argsOnly = true) MapRenderState mapRenderState
@@ -253,10 +259,10 @@ public abstract class MapRendererMixin implements RenderRelightCounter {
 
         for (int i = 0; i < 4; i++) {
             int rotatedVertNum = switch (mapRenderState.rotation()) {
-                default -> i;
                 case 1, 5 -> vertexRotationMap[0][i];
                 case 2, 6 -> vertexRotationMap[1][i];
                 case 3, 7 -> vertexRotationMap[2][i];
+                default -> i;
             };
 
             if (!shouldReuseVertexLights) {

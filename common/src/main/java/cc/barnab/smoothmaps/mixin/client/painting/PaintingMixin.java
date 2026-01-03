@@ -1,10 +1,9 @@
 package cc.barnab.smoothmaps.mixin.client.painting;
 
 import cc.barnab.smoothmaps.client.PaintingLightAccessor;
-import net.minecraft.client.renderer.entity.state.PaintingRenderState;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
-import net.minecraft.world.entity.decoration.Painting;
+import net.minecraft.world.entity.decoration.painting.Painting;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Unique;
 
