@@ -1,31 +1,22 @@
 package cc.barnab.smoothmaps.mixin.client.painting;
 
-import cc.barnab.smoothmaps.client.LightUpdateAccessor;
+import cc.barnab.smoothmaps.client.LightUpdateTracker;
 import cc.barnab.smoothmaps.client.MathUtil;
 import cc.barnab.smoothmaps.client.RenderRelightCounter;
-import com.llamalad7.mixinextras.expression.Expression;
 import com.llamalad7.mixinextras.injector.v2.WrapWithCondition;
 import com.llamalad7.mixinextras.sugar.Local;
 import com.llamalad7.mixinextras.sugar.Share;
 import com.llamalad7.mixinextras.sugar.ref.LocalBooleanRef;
-import com.llamalad7.mixinextras.sugar.ref.LocalRef;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexConsumer;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.renderer.LevelRenderer;
 import net.minecraft.client.renderer.entity.PaintingRenderer;
 import net.minecraft.client.renderer.entity.state.PaintingRenderState;
 import net.minecraft.client.renderer.texture.OverlayTexture;
-import net.minecraft.client.renderer.texture.TextureAtlas;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.entity.decoration.painting.Painting;
-import net.minecraft.world.entity.decoration.painting.PaintingVariant;
-import net.minecraft.world.level.BlockAndTintGetter;
-import net.minecraft.world.level.Level;
-import net.minecraft.world.level.lighting.LevelLightEngine;
-import org.spongepowered.asm.mixin.Final;
+import net.minecraft.world.level.ChunkPos;
 import org.spongepowered.asm.mixin.Mixin;
-import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
@@ -38,10 +29,6 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 @Mixin(PaintingRenderer.class)
 public abstract class PaintingRendererMixin implements RenderRelightCounter {
-
-    @Shadow
-    @Final
-    private TextureAtlas paintingsAtlas;
     @Unique
     private static final String VERTEX_TARGET = "Lnet/minecraft/client/renderer/entity/PaintingRenderer;vertex(Lcom/mojang/blaze3d/vertex/PoseStack$Pose;Lcom/mojang/blaze3d/vertex/VertexConsumer;FFFFFIIII)V";
 
@@ -90,14 +77,12 @@ public abstract class PaintingRendererMixin implements RenderRelightCounter {
 
             BlockPos blockPos = BlockPos.containing(paintingRenderState.x, paintingRenderState.y, paintingRenderState.z);
 
-            LevelLightEngine lightEngine = painting.level().getLightEngine();
-
             // Clear vert lights array if the size of the painting has changed
             int pWidth = paintingRenderState.variant.width();
             int pHeight = paintingRenderState.variant.height();
             int frontFaceVertCount = (pWidth + 1) * (pHeight + 1);
 
-            boolean shouldRelight = ((LightUpdateAccessor)lightEngine).getLastUpdated() > painting.getLastUpdated()
+            boolean shouldRelight = LightUpdateTracker.getLastUpdated(blockPos) > painting.getLastUpdated()
                     || !blockPos.equals(painting.getLastBlockPos())
                     || !painting.getDirection().equals(painting.getLastDirection())
                     || vertLights == null
@@ -139,8 +124,7 @@ public abstract class PaintingRendererMixin implements RenderRelightCounter {
             @Share("isNorthEdge")LocalBooleanRef isNorthEdge,
             @Share("isEastEdge")LocalBooleanRef isEastEdge,
             @Share("isSouthEdge")LocalBooleanRef isSouthEdge,
-            @Share("isWestEdge")LocalBooleanRef isWestEdge,
-            @Share("blockPos") LocalRef<BlockPos> blockPos
+            @Share("isWestEdge")LocalBooleanRef isWestEdge
     ) {
         isNorthEdge.set(blockY == pHeight - 1);
         isWestEdge.set(blockX == pWidth - 1);
@@ -220,21 +204,11 @@ public abstract class PaintingRendererMixin implements RenderRelightCounter {
             PaintingRenderer instance, PoseStack.Pose pose, VertexConsumer vertexConsumer, float f, float g, float h, float i, float j, int k, int l, int m, int n,
             @Local(ordinal = 0, argsOnly = true) int[] lightCoords,
             @Local(ordinal = 0, argsOnly = true) int pWidth,
-            @Local(ordinal = 1, argsOnly = true) int pHeight,
-            @Local(ordinal = 2) int blockX,
-            @Local(ordinal = 3) int blockY
+            @Local(ordinal = 1, argsOnly = true) int pHeight
     ) {
         if (Minecraft.useAmbientOcclusion()) {
             int packedVertPos = (int)((g + (float) pHeight / 2.0f) * (pWidth+1) + (f + (float) pWidth / 2.0f));
-            //if (lightCoords[packedVertPos] != -1) {
-                n = lightCoords[packedVertPos];
-//            } else {
-//                float xInBlock = f + (float) pWidth / 2.0f - blockX;
-//                float yInBlock = g + (float) pHeight / 2.0f - blockY;
-//                n = getLight(blockX, blockY, pWidth, pHeight, lightCoords, xInBlock, yInBlock);
-//
-//                lightCoords[packedVertPos] = n;
-//            }
+            n = lightCoords[packedVertPos];
         }
 
         vertexConsumer.addVertex(pose, f, g, j).setColor(-1).setUv(h, i).setOverlay(OverlayTexture.NO_OVERLAY).setLight(n).setNormal(pose, (float)k, (float)l, (float)m);
