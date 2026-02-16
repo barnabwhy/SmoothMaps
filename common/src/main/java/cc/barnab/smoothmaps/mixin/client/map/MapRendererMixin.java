@@ -164,6 +164,9 @@ public abstract class MapRendererMixin implements RenderRelightCounter {
         itemFrame.setLastRotation(itemFrame.getRotation());
         itemFrame.setLastDirection(itemFrame.getDirection());
 
+        LayerLightEventListener skyListener = lightEngine.getLayerListener(LightLayer.SKY);
+        LayerLightEventListener blockListener = lightEngine.getLayerListener(LightLayer.BLOCK);
+
         // Get light levels for surrounding blocks
         for (int x = -1; x <= 1; x++) {
             for (int y = -1; y <= 1; y++) {
@@ -176,15 +179,11 @@ public abstract class MapRendererMixin implements RenderRelightCounter {
                     BlockPos pos = blockPos.offset(x, y, z);
 
                     int light = 0;
-                    if (lightEngine.skyEngine != null) {
-                        int skyLight = lightEngine.skyEngine.getLightValue(pos);
-                        light += (skyLight * 16) << 16;
-                    }
+                    int skyLight = skyListener.getLightValue(pos);
+                    light += (skyLight * 16) << 16;
 
-                    if (lightEngine.blockEngine != null) {
-                        int blockLight = lightEngine.blockEngine.getLightValue(pos);
-                        light += blockLight * 16;
-                    }
+                    int blockLight = blockListener.getLightValue(pos);
+                    light += blockLight * 16;
 
                     lightLevels[x+1][y+1][z+1] = light;
                 }
