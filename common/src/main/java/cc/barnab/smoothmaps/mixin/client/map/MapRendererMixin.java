@@ -99,11 +99,7 @@ public abstract class MapRendererMixin implements RenderRelightCounter {
             return false;
 
         // Is the camera facing away from the frame?
-        float clampedFovModifier = Math.max(Math.max(gameRenderer.fovModifier, gameRenderer.oldFovModifier), 1f);
-        float fovVert = (float) Math.toRadians((float)Minecraft.getInstance().options.fov().get() * clampedFovModifier);
-        float fovHoriz = fovVert * (float)Minecraft.getInstance().getWindow().getWidth() / (float)Minecraft.getInstance().getWindow().getHeight();
-
-        float threshold = (float) Math.cos(Math.PI - fovHoriz);
+        float threshold = gameRenderer.getMapCullingDotThreshold();
 
         Vector3f step = mapRenderState.direction().step(); // axis-aligned unit vector
         float dot = step.x * camLook.x()
