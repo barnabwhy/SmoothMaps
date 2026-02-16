@@ -1,6 +1,6 @@
 package cc.barnab.smoothmaps.mixin.client.map;
 
-import cc.barnab.smoothmaps.client.LightUpdateAccessor;
+import cc.barnab.smoothmaps.client.LightUpdateTracker;
 import cc.barnab.smoothmaps.client.MathUtil;
 import cc.barnab.smoothmaps.client.RenderRelightCounter;
 import cc.barnab.smoothmaps.compat.ImmediatelyFastCompat;
@@ -17,6 +17,9 @@ import net.minecraft.client.renderer.state.MapRenderState;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.world.entity.decoration.ItemFrame;
+import net.minecraft.world.level.ChunkPos;
+import net.minecraft.world.level.LightLayer;
+import net.minecraft.world.level.lighting.LayerLightEventListener;
 import net.minecraft.world.level.lighting.LevelLightEngine;
 import org.joml.Vector3fc;
 import org.spongepowered.asm.mixin.Mixin;
@@ -76,36 +79,25 @@ public abstract class MapRendererMixin implements RenderRelightCounter {
     }
 
     @Unique
-    private boolean shouldSmoothLight(MapRenderState mapRenderState, boolean shouldReuseVertexLights) {
-        if (mapRenderState.isGlowing())
-            return false;
-
-        if (!Minecraft.useAmbientOcclusion())
-            return false;
-
-        // If we're reusing the light values it's faster than these checks
-        // So just skip them and allow smooth lighting
-        if (shouldReuseVertexLights)
-            return true;
-
-        // Optimisations to disable smooth lighting in situations you wouldn't see it
+    private boolean shouldRender(MapRenderState mapRenderState) {
+        // Optimisations to disable rendering maps in situations you wouldn't see the map
         GameRenderer gameRenderer = Minecraft.getInstance().gameRenderer;
         Camera mainCamera = gameRenderer.getMainCamera();
         Vector3fc camLook = mainCamera.forwardVector();
 
-        // Is camera behind frame
+        // Is the camera behind the frame?
         Direction.Axis axis = mapRenderState.direction().getAxis();
         Direction.AxisDirection axisDir = mapRenderState.direction().getAxisDirection();
         boolean isCamBehind = switch (axis) {
-            case X -> (mapRenderState.getBlockPos().getX() - mainCamera.position().x) * axisDir.getStep() > 1f;
-            case Y -> (mapRenderState.getBlockPos().getY() - mainCamera.position().y) * axisDir.getStep() > 1f;
-            case Z -> (mapRenderState.getBlockPos().getZ() - mainCamera.position().z) * axisDir.getStep() > 1f;
+            case X -> (mapRenderState.getBlockPos().getX() + 0.5f - mainCamera.position().x) * axisDir.getStep() > 0.5f;
+            case Y -> (mapRenderState.getBlockPos().getY() + 0.5f - mainCamera.position().y) * axisDir.getStep() > 0.5f;
+            case Z -> (mapRenderState.getBlockPos().getZ() + 0.5f - mainCamera.position().z) * axisDir.getStep() > 0.5f;
         };
 
         if (isCamBehind)
             return false;
 
-        // Is camera facing away from frame
+        // Is the camera facing away from the frame?
         float clampedFovModifier = Math.max(Math.max(gameRenderer.fovModifier, gameRenderer.oldFovModifier), 1f);
         float fovVert = (float) Math.toRadians((float)Minecraft.getInstance().options.fov().get() * clampedFovModifier);
         float fovHoriz = fovVert * (float)Minecraft.getInstance().getWindow().getWidth() / (float)Minecraft.getInstance().getWindow().getHeight();
@@ -115,7 +107,7 @@ public abstract class MapRendererMixin implements RenderRelightCounter {
         return true;
     }
 
-    @Inject(method = "render", at = @At("HEAD"))
+    @Inject(method = "render", at = @At("HEAD"), cancellable = true)
     private void render(
             MapRenderState mapRenderState, PoseStack poseStack, SubmitNodeCollector submitNodeCollector, boolean bl, int i,
             CallbackInfo ci,
@@ -134,21 +126,32 @@ public abstract class MapRendererMixin implements RenderRelightCounter {
         // Call this after because we only want to count those in item frames
         numRendered++;
 
+        // Skip smooth lighting glow item frames or if smooth lighting is disabled
+        if (mapRenderState.isGlowing() || !Minecraft.useAmbientOcclusion()) {
+            shouldSmoothLight = false;
+            return;
+        }
+
+        shouldSmoothLight = true;
+
         // Check if we can reuse vertex lights
         assert Minecraft.getInstance().level != null;
         LevelLightEngine lightEngine = Minecraft.getInstance().level.getLightEngine();
 
         BlockPos blockPos = mapRenderState.getBlockPos();
 
-        shouldReuseVertexLights = ((LightUpdateAccessor)lightEngine).getLastUpdated() <= itemFrame.getLastUpdated()
+        shouldReuseVertexLights = LightUpdateTracker.getLastUpdated(new ChunkPos(blockPos)) <= itemFrame.getLastUpdated()
                 && blockPos.equals(itemFrame.getLastBlockPos())
                 && itemFrame.getDirection().equals(itemFrame.getLastDirection())
                 && itemFrame.getRotation() == itemFrame.getLastRotation();
 
-        // Don't smooth light held maps or glow frames
-        shouldSmoothLight = shouldSmoothLight(mapRenderState, shouldReuseVertexLights);
-        if (!shouldSmoothLight)
+        // If we can skip rendering, we should
+        // Skip checks if reusing lighting to save CPU
+        if (!shouldReuseVertexLights && !shouldRender(mapRenderState)) {
+            numRendered--;
+            ci.cancel();
             return;
+        }
 
         numSmoothLit++;
 
