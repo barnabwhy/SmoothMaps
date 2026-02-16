@@ -128,6 +128,13 @@ public abstract class MapRendererMixin implements RenderRelightCounter {
             return;
         }
 
+        // If we can skip rendering, we should
+        // Skip checks if reusing lighting to save CPU
+        if (!shouldReuseVertexLights && !shouldRender(mapRenderState)) {
+            ci.cancel();
+            return;
+        }
+
         // Call this after because we only want to count those in item frames
         numRendered++;
 
@@ -149,14 +156,6 @@ public abstract class MapRendererMixin implements RenderRelightCounter {
                 && blockPos.equals(itemFrame.getLastBlockPos())
                 && itemFrame.getDirection().equals(itemFrame.getLastDirection())
                 && itemFrame.getRotation() == itemFrame.getLastRotation();
-
-        // If we can skip rendering, we should
-        // Skip checks if reusing lighting to save CPU
-        if (!shouldReuseVertexLights && !shouldRender(mapRenderState)) {
-            numRendered--;
-            ci.cancel();
-            return;
-        }
 
         numSmoothLit++;
 
