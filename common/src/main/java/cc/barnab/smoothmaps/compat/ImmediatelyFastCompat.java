@@ -39,24 +39,30 @@ public final class ImmediatelyFastCompat {
         return available;
     }
 
-    public static float[] getUVs(Object renderState) {
-        if (!available || !renderStateClass.isInstance(renderState)) return null;
+    public static boolean getUVs(Object renderState, float[] outUv4) {
+        if (!available || !renderStateClass.isInstance(renderState)) return false;
+        if (outUv4 == null || outUv4.length < 4) return false;
 
         try {
             Object atlas = getAtlasTexture.invoke(renderState);
-            if (atlas == null) return null;
+            if (atlas == null) return false;
 
             int x = (int) getAtlasX.invoke(renderState);
             int y = (int) getAtlasY.invoke(renderState);
 
-            float u1 = (float)x / atlasSize;
-            float u2 = (float)(x + mapSize) / atlasSize;
-            float v1 = (float)y / atlasSize;
-            float v2 = (float)(y + mapSize) / atlasSize;
+            float invAtlasSize = 1.0f / (float) atlasSize;
+            float scaledMapSize = mapSize * invAtlasSize;
 
-            return new float[]{u1, v1, u2, v2};
+            float u1 = (float)x * invAtlasSize;
+            float v1 = (float)y * invAtlasSize;
+
+            outUv4[0] = u1;
+            outUv4[1] = v1;
+            outUv4[2] = u1 + scaledMapSize;
+            outUv4[3] = v1 + scaledMapSize;
+            return true;
         } catch (Throwable ignored) {
-            return null;
+            return false;
         }
     }
 

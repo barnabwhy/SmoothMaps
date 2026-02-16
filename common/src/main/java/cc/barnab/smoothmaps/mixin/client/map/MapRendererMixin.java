@@ -21,6 +21,7 @@ import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.LightLayer;
 import net.minecraft.world.level.lighting.LayerLightEventListener;
 import net.minecraft.world.level.lighting.LevelLightEngine;
+import org.joml.Vector3f;
 import org.joml.Vector3fc;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Unique;
@@ -101,7 +102,15 @@ public abstract class MapRendererMixin implements RenderRelightCounter {
         float clampedFovModifier = Math.max(Math.max(gameRenderer.fovModifier, gameRenderer.oldFovModifier), 1f);
         float fovVert = (float) Math.toRadians((float)Minecraft.getInstance().options.fov().get() * clampedFovModifier);
         float fovHoriz = fovVert * (float)Minecraft.getInstance().getWindow().getWidth() / (float)Minecraft.getInstance().getWindow().getHeight();
-        if (mapRenderState.direction().step().angle(camLook) < Math.PI - fovHoriz)
+
+        float threshold = (float) Math.cos(Math.PI - fovHoriz);
+
+        Vector3f step = mapRenderState.direction().step(); // axis-aligned unit vector
+        float dot = step.x * camLook.x()
+                  + step.y * camLook.y()
+                  + step.z * camLook.z();
+
+        if (dot > threshold)
             return false;
 
         return true;
@@ -140,7 +149,7 @@ public abstract class MapRendererMixin implements RenderRelightCounter {
 
         BlockPos blockPos = mapRenderState.getBlockPos();
 
-        shouldReuseVertexLights = LightUpdateTracker.getLastUpdated(new ChunkPos(blockPos)) <= itemFrame.getLastUpdated()
+        shouldReuseVertexLights = LightUpdateTracker.getLastUpdated(blockPos) <= itemFrame.getLastUpdated()
                 && blockPos.equals(itemFrame.getLastBlockPos())
                 && itemFrame.getDirection().equals(itemFrame.getLastDirection())
                 && itemFrame.getRotation() == itemFrame.getLastRotation();
@@ -171,6 +180,7 @@ public abstract class MapRendererMixin implements RenderRelightCounter {
         LayerLightEventListener blockListener = lightEngine.getLayerListener(LightLayer.BLOCK);
 
         // Get light levels for surrounding blocks
+        BlockPos.MutableBlockPos pos = new BlockPos.MutableBlockPos();
         for (int x = -1; x <= 1; x++) {
             for (int y = -1; y <= 1; y++) {
                 for (int z = -1; z <= 1; z++) {
@@ -179,11 +189,10 @@ public abstract class MapRendererMixin implements RenderRelightCounter {
                         continue;
                     }
 
-                    BlockPos pos = blockPos.offset(x, y, z);
+                    pos.set(blockPos.getX() + x, blockPos.getY() + y, blockPos.getZ() + z);
 
-                    int light = 0;
                     int skyLight = skyListener.getLightValue(pos);
-                    light += (skyLight * 16) << 16;
+                    int light = (skyLight * 16) << 16;
 
                     int blockLight = blockListener.getLightValue(pos);
                     light += blockLight * 16;
@@ -245,6 +254,9 @@ public abstract class MapRendererMixin implements RenderRelightCounter {
         }
     }
 
+    @Unique
+    final float[] imFastUvs = { 0f, 0f, 0f, 0f };
+
     @WrapWithCondition(
             method = "render",
             at = @At(value = "INVOKE", target = "Lnet/minecraft/client/renderer/SubmitNodeCollector;submitCustomGeometry(Lcom/mojang/blaze3d/vertex/PoseStack;Lnet/minecraft/client/renderer/rendertype/RenderType;Lnet/minecraft/client/renderer/SubmitNodeCollector$CustomGeometryRenderer;)V", ordinal = 0)
@@ -255,7 +267,7 @@ public abstract class MapRendererMixin implements RenderRelightCounter {
         if (!shouldSmoothLight)
             return true;
 
-        int[] lights = { light, light, light, light };
+        int l0 = light, l1 = light, l2 = light, l3 = light;
 
         int[] vertexLights = mapRenderState.getItemFrame().getVertLights();
 
@@ -291,27 +303,34 @@ public abstract class MapRendererMixin implements RenderRelightCounter {
                 vertexLights[rotatedVertNum] = lightVal;
             }
 
-            lights[i] = vertexLights[rotatedVertNum];
+            switch (i) {
+                case 0 -> l0 = vertexLights[rotatedVertNum];
+                case 1 -> l1 = vertexLights[rotatedVertNum];
+                case 2 -> l2 = vertexLights[rotatedVertNum];
+                case 3 -> l3 = vertexLights[rotatedVertNum];
+            }
         }
 
         if (!shouldReuseVertexLights)
             mapRenderState.getItemFrame().setVertLights(vertexLights);
 
+        final int fl0 = l0, fl1 = l1, fl2 = l2, fl3 = l3;
+
         // ImmediatelyFast messes with the UVs of maps by putting them into an atlas, lovely
         // We need to mimic its behaviour otherwise our map will render the entire map atlas :(
         if (ImmediatelyFastCompat.isAvailable()) {
-            float[] uvs = ImmediatelyFastCompat.getUVs(mapRenderState);
-            if (uvs != null) {
-                float u1 = uvs[0];
-                float v1 = uvs[1];
-                float u2 = uvs[2];
-                float v2 = uvs[3];
+            ImmediatelyFastCompat.getUVs(mapRenderState, imFastUvs);
+            if (imFastUvs != null) {
+                float u1 = imFastUvs[0];
+                float v1 = imFastUvs[1];
+                float u2 = imFastUvs[2];
+                float v2 = imFastUvs[3];
 
                 instance.submitCustomGeometry(poseStack, renderType, (pose, vertexConsumer) -> {
-                    vertexConsumer.addVertex(pose, 0.0F, 128.0F, -0.01F).setColor(-1).setUv(u1, v2).setLight(lights[0]);
-                    vertexConsumer.addVertex(pose, 128.0F, 128.0F, -0.01F).setColor(-1).setUv(u2, v2).setLight(lights[1]);
-                    vertexConsumer.addVertex(pose, 128.0F, 0.0F, -0.01F).setColor(-1).setUv(u2, v1).setLight(lights[2]);
-                    vertexConsumer.addVertex(pose, 0.0F, 0.0F, -0.01F).setColor(-1).setUv(u1, v1).setLight(lights[3]);
+                    vertexConsumer.addVertex(pose, 0.0F, 128.0F, -0.01F).setColor(-1).setUv(u1, v2).setLight(fl0);
+                    vertexConsumer.addVertex(pose, 128.0F, 128.0F, -0.01F).setColor(-1).setUv(u2, v2).setLight(fl1);
+                    vertexConsumer.addVertex(pose, 128.0F, 0.0F, -0.01F).setColor(-1).setUv(u2, v1).setLight(fl2);
+                    vertexConsumer.addVertex(pose, 0.0F, 0.0F, -0.01F).setColor(-1).setUv(u1, v1).setLight(fl3);
                 });
 
                 return false;
@@ -319,10 +338,10 @@ public abstract class MapRendererMixin implements RenderRelightCounter {
         }
 
         instance.submitCustomGeometry(poseStack, renderType, (pose, vertexConsumer) -> {
-            vertexConsumer.addVertex(pose, 0.0F, 128.0F, -0.01F).setColor(-1).setUv(0.0F, 1.0F).setLight(lights[0]);
-            vertexConsumer.addVertex(pose, 128.0F, 128.0F, -0.01F).setColor(-1).setUv(1.0F, 1.0F).setLight(lights[1]);
-            vertexConsumer.addVertex(pose, 128.0F, 0.0F, -0.01F).setColor(-1).setUv(1.0F, 0.0F).setLight(lights[2]);
-            vertexConsumer.addVertex(pose, 0.0F, 0.0F, -0.01F).setColor(-1).setUv(0.0F, 0.0F).setLight(lights[3]);
+            vertexConsumer.addVertex(pose, 0.0F, 128.0F, -0.01F).setColor(-1).setUv(0.0F, 1.0F).setLight(fl0);
+            vertexConsumer.addVertex(pose, 128.0F, 128.0F, -0.01F).setColor(-1).setUv(1.0F, 1.0F).setLight(fl1);
+            vertexConsumer.addVertex(pose, 128.0F, 0.0F, -0.01F).setColor(-1).setUv(1.0F, 0.0F).setLight(fl2);
+            vertexConsumer.addVertex(pose, 0.0F, 0.0F, -0.01F).setColor(-1).setUv(0.0F, 0.0F).setLight(fl3);
         });
         return false;
     }
@@ -402,20 +421,28 @@ public abstract class MapRendererMixin implements RenderRelightCounter {
             case NORTH, SOUTH, WEST, EAST -> Direction.DOWN;
         };
 
-        BlockPos.MutableBlockPos pos = BlockPos.ZERO.mutable();
+        int dx = 0, dy = 0, dz = 0;
 
-        if (xStep > 0)
-            pos.move(rightDir, 1);
+        if (xStep > 0) {
+            dx += rightDir.getStepX();
+            dy += rightDir.getStepY();
+            dz += rightDir.getStepZ();
+        } else if (xStep < 0) {
+            dx += leftDir.getStepX();
+            dy += leftDir.getStepY();
+            dz += leftDir.getStepZ();
+        }
 
-        if (xStep < 0)
-            pos.move(leftDir, 1);
+        if (yStep > 0) {
+            dx += upDir.getStepX();
+            dy += upDir.getStepY();
+            dz += upDir.getStepZ();
+        } else if (yStep < 0) {
+            dx += downDir.getStepX();
+            dy += downDir.getStepY();
+            dz += downDir.getStepZ();
+        }
 
-        if (yStep > 0)
-            pos.move(upDir, 1);
-
-        if (yStep < 0)
-            pos.move(downDir, 1);
-
-        return blockLights[pos.getX()+1][pos.getY()+1][pos.getZ()+1];
+        return blockLights[dx+1][dy+1][dz+1];
     }
 }

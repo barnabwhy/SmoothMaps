@@ -82,9 +82,7 @@ public abstract class PaintingRendererMixin implements RenderRelightCounter {
             int pHeight = paintingRenderState.variant.height();
             int frontFaceVertCount = (pWidth + 1) * (pHeight + 1);
 
-            ChunkPos chunkPos = new ChunkPos(blockPos);
-
-            boolean shouldRelight = LightUpdateTracker.getLastUpdated(chunkPos) > painting.getLastUpdated()
+            boolean shouldRelight = LightUpdateTracker.getLastUpdated(blockPos) > painting.getLastUpdated()
                     || !blockPos.equals(painting.getLastBlockPos())
                     || !painting.getDirection().equals(painting.getLastDirection())
                     || vertLights == null

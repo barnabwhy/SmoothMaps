@@ -1,5 +1,6 @@
 package cc.barnab.smoothmaps.client;
 
+import net.minecraft.core.BlockPos;
 import net.minecraft.world.level.ChunkPos;
 
 import it.unimi.dsi.fastutil.longs.Long2LongMap;
@@ -13,15 +14,15 @@ public class LightUpdateTracker {
         chunkUpdateTimes.defaultReturnValue(0L);
     }
 
-    public static synchronized long getLastUpdated(ChunkPos chunkPos) {
-        return chunkUpdateTimes.get(chunkPos.toLong());
+    public static long getLastUpdated(BlockPos blockPos) {
+        return chunkUpdateTimes.get(ChunkPos.asLong(blockPos.getX() >> 4, blockPos.getZ() >> 4));
     }
 
-    public static synchronized void setLastUpdated(long chunkPos, long lastUpdated) {
+    public static void setLastUpdated(long chunkPos, long lastUpdated) {
         chunkUpdateTimes.put(chunkPos, lastUpdated);
     }
 
-    public static synchronized void reset() {
+    public static void reset() {
         chunkUpdateTimes.clear();
     }
 }

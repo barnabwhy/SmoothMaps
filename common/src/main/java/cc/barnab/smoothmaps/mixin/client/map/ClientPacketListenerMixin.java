@@ -31,6 +31,7 @@ public class ClientPacketListenerMixin {
         Optional<MapItemSavedData.MapPatch> patch = packet.colorPatch();
         patch.ifPresent(mapPatch -> mapInstance.setDirty(mapPatch.startX(), mapPatch.startY(), mapPatch.width(), mapPatch.height()));
 
+        // Actually just sets requiresUpload = true
         mapInstance.forceUpload();
     }
 }

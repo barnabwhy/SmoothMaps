@@ -3,6 +3,7 @@ package cc.barnab.smoothmaps.mixin.client;
 import cc.barnab.smoothmaps.client.LightUpdateTracker;
 import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
 import it.unimi.dsi.fastutil.longs.LongSet;
+import net.minecraft.client.Minecraft;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.SectionPos;
 import net.minecraft.util.Util;
@@ -51,13 +52,19 @@ public class LevelLightEngineMixin {
 
     @Inject(method = "runLightUpdates", at = @At("RETURN"))
     private void onUpdatesComplete(CallbackInfoReturnable<Integer> cir) {
-        if (!this.modifiedChunks.isEmpty()) {
-            for (long chunkPos : this.modifiedChunks) {
-                LightUpdateTracker.setLastUpdated(chunkPos, Util.getNanos());
-            }
+        if (this.modifiedChunks.isEmpty())
+            return;
 
-            // Clear the set so we don't re-process them next tick
-            this.modifiedChunks.clear();
-        }
+        final long[] chunks = this.modifiedChunks.toLongArray();
+        // Clear the set so we don't re-process them next tick
+        this.modifiedChunks.clear();
+
+        // Run on the main thread
+        long updateTime = Minecraft.getInstance().gameRenderer.getLastRenderTime();
+        Minecraft.getInstance().execute(() -> {
+            for (long chunkPos : chunks) {
+                LightUpdateTracker.setLastUpdated(chunkPos, updateTime);
+            }
+        });
     }
 }
