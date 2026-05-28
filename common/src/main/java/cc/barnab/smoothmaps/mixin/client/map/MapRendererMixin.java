@@ -139,7 +139,7 @@ public abstract class MapRendererMixin implements RenderRelightCounter {
         numRendered++;
 
         // Skip smooth lighting glow item frames or if smooth lighting is disabled
-        if (mapRenderState.isGlowing() || !Minecraft.useAmbientOcclusion()) {
+        if (mapRenderState.isGlowing() || !Minecraft.getInstance().options.ambientOcclusion().get()) {
             shouldSmoothLight = false;
             return;
         }

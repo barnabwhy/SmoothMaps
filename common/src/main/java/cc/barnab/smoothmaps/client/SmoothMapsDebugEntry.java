@@ -24,7 +24,18 @@ public class SmoothMapsDebugEntry implements DebugScreenEntry {
     public void display(DebugScreenDisplayer debugScreenDisplayer, @Nullable Level level, @Nullable LevelChunk levelChunk, @Nullable LevelChunk levelChunk2) {
         debugScreenDisplayer.addToGroup(GROUP, VERSION_STR);
 
-        if (Minecraft.useAmbientOcclusion()) {
+        boolean smoothLightingEnabled = Minecraft.getInstance().options.ambientOcclusion().get();
+
+         if (!smoothLightingEnabled) {
+            debugScreenDisplayer.addToGroup(GROUP, "Smooth lighting disabled");
+        }
+
+        // No world loaded
+         if (Minecraft.getInstance().level == null) {
+             return;
+         }
+
+        if (smoothLightingEnabled) {
             MapRenderer mapRenderer = Minecraft.getInstance().getMapRenderer();
             debugScreenDisplayer.addToGroup(GROUP, "Framed maps: " + mapRenderer.getNumSmoothLit() + "/" + mapRenderer.getNumRendered() + " (" + mapRenderer.getNumRelit() + " relit)");
 
@@ -32,8 +43,6 @@ public class SmoothMapsDebugEntry implements DebugScreenEntry {
             if (paintingRenderer != null) {
                 debugScreenDisplayer.addToGroup(GROUP, "Paintings: " + paintingRenderer.getNumSmoothLit() + "/" + paintingRenderer.getNumRendered() + " (" + paintingRenderer.getNumRelit() + " relit)");
             }
-        } else {
-            debugScreenDisplayer.addToGroup(GROUP, "Smooth lighting disabled.");
         }
     }
 }

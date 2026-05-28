@@ -15,7 +15,7 @@ public class LightUpdateTracker {
     }
 
     public static long getLastUpdated(BlockPos blockPos) {
-        return chunkUpdateTimes.get(ChunkPos.asLong(blockPos.getX() >> 4, blockPos.getZ() >> 4));
+        return chunkUpdateTimes.get(ChunkPos.pack(blockPos.getX() >> 4, blockPos.getZ() >> 4));
     }
 
     public static void setLastUpdated(long chunkPos, long lastUpdated) {

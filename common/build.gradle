@@ -6,10 +6,19 @@ dependencies {
     // We depend on Fabric Loader here to use the Fabric @Environment annotations,
     // which get remapped to the correct annotations on each platform.
     // Do NOT use other classes from Fabric Loader.
-    modImplementation "net.fabricmc:fabric-loader:$rootProject.fabric_loader_version"
+    implementation "net.fabricmc:fabric-loader:$rootProject.fabric_loader_version"
+
+//    // Mixin dependencies
+//    compileOnly "net.fabricmc:sponge-mixin:0.15.4+mixin.0.8.7"
+//    implementation "io.github.llamalad7:mixinextras-common:0.4.1"
+//    annotationProcessor "io.github.llamalad7:mixinextras-common:0.4.1"
 
 }
 
 loom {
     accessWidenerPath = file("src/main/resources/smoothmaps.accesswidener")
+
+    interfaceInjection {
+        enableDependencyInterfaceInjection = true
+    }
 }

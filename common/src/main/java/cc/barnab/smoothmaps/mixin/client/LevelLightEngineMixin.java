@@ -28,7 +28,7 @@ public class LevelLightEngineMixin {
     @Inject(method = "queueSectionData", at = @At("RETURN"))
     private void onQueueData(LightLayer layer, SectionPos pos, DataLayer data, CallbackInfo ci) {
         if (data != null) {
-            this.modifiedChunks.add(pos.chunk().toLong());
+            this.modifiedChunks.add(pos.chunk().pack());
         }
     }
 
@@ -39,15 +39,15 @@ public class LevelLightEngineMixin {
 
 
         // Add center and all 8 neighbors (North, South, East, West, and Diagonals)
-        this.modifiedChunks.add(ChunkPos.asLong(cx, cz));
-        this.modifiedChunks.add(ChunkPos.asLong(cx + 1, cz));
-        this.modifiedChunks.add(ChunkPos.asLong(cx - 1, cz));
-        this.modifiedChunks.add(ChunkPos.asLong(cx, cz + 1));
-        this.modifiedChunks.add(ChunkPos.asLong(cx, cz - 1));
-        this.modifiedChunks.add(ChunkPos.asLong(cx + 1, cz + 1));
-        this.modifiedChunks.add(ChunkPos.asLong(cx + 1, cz - 1));
-        this.modifiedChunks.add(ChunkPos.asLong(cx - 1, cz + 1));
-        this.modifiedChunks.add(ChunkPos.asLong(cx - 1, cz - 1));
+        this.modifiedChunks.add(ChunkPos.pack(cx, cz));
+        this.modifiedChunks.add(ChunkPos.pack(cx + 1, cz));
+        this.modifiedChunks.add(ChunkPos.pack(cx - 1, cz));
+        this.modifiedChunks.add(ChunkPos.pack(cx, cz + 1));
+        this.modifiedChunks.add(ChunkPos.pack(cx, cz - 1));
+        this.modifiedChunks.add(ChunkPos.pack(cx + 1, cz + 1));
+        this.modifiedChunks.add(ChunkPos.pack(cx + 1, cz - 1));
+        this.modifiedChunks.add(ChunkPos.pack(cx - 1, cz + 1));
+        this.modifiedChunks.add(ChunkPos.pack(cx - 1, cz - 1));
     }
 
     @Inject(method = "runLightUpdates", at = @At("RETURN"))

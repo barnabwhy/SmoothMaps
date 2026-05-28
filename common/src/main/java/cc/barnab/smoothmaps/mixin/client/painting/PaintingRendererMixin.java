@@ -68,7 +68,7 @@ public abstract class PaintingRendererMixin implements RenderRelightCounter {
 
         paintingRenderState.setPainting(painting);
 
-        if (Minecraft.useAmbientOcclusion()) {
+        if (Minecraft.getInstance().options.ambientOcclusion().get()) {
             numSmoothLit++;
 
             assert paintingRenderState.variant != null;
@@ -114,8 +114,8 @@ public abstract class PaintingRendererMixin implements RenderRelightCounter {
     }
 
 
-    @Inject(method = "method_72990", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/renderer/texture/TextureAtlasSprite;getV(F)F", ordinal = 2))
-    private void performEdgeChecks(
+    @Inject(method = "lambda$renderPainting$0", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/renderer/texture/TextureAtlasSprite;getV(F)F", ordinal = 2))
+    private static void performEdgeChecks(
             CallbackInfo ci,
             @Local(argsOnly = true, ordinal = 0) int pWidth,
             @Local(argsOnly = true, ordinal = 1) int pHeight,
@@ -133,7 +133,7 @@ public abstract class PaintingRendererMixin implements RenderRelightCounter {
     }
 
     @WrapWithCondition(
-            method = "method_72990",
+            method = "lambda$renderPainting$0",
             at = {
                     @At(ordinal = 8, value = "INVOKE", target = VERTEX_TARGET),
                     @At(ordinal = 9, value = "INVOKE", target = VERTEX_TARGET),
@@ -141,15 +141,15 @@ public abstract class PaintingRendererMixin implements RenderRelightCounter {
                     @At(ordinal = 11, value = "INVOKE", target = VERTEX_TARGET)
             }
     )
-    private boolean preventNorthFace(
-            PaintingRenderer instance, PoseStack.Pose pose, VertexConsumer vertexConsumer, float f, float g, float h, float i, float j, int k, int l, int m, int n,
+    private static boolean preventNorthFace(
+            PoseStack.Pose pose, VertexConsumer vertexConsumer, float f, float g, float h, float i, float j, int k, int l, int m, int n,
             @Share("isNorthEdge") LocalBooleanRef isEdge
             ) {
         return isEdge.get();
     }
 
     @WrapWithCondition(
-            method = "method_72990",
+            method = "lambda$renderPainting$0",
             at = {
                     @At(ordinal = 12, value = "INVOKE", target = VERTEX_TARGET),
                     @At(ordinal = 13, value = "INVOKE", target = VERTEX_TARGET),
@@ -157,15 +157,15 @@ public abstract class PaintingRendererMixin implements RenderRelightCounter {
                     @At(ordinal = 15, value = "INVOKE", target = VERTEX_TARGET)
             }
     )
-    private boolean preventSouthFace(
-            PaintingRenderer instance, PoseStack.Pose pose, VertexConsumer vertexConsumer, float f, float g, float h, float i, float j, int k, int l, int m, int n,
+    private static boolean preventSouthFace(
+            PoseStack.Pose pose, VertexConsumer vertexConsumer, float f, float g, float h, float i, float j, int k, int l, int m, int n,
             @Share("isSouthEdge") LocalBooleanRef isEdge
     ) {
         return isEdge.get();
     }
 
     @WrapWithCondition(
-            method = "method_72990",
+            method = "lambda$renderPainting$0",
             at = {
                     @At(ordinal = 16, value = "INVOKE", target = VERTEX_TARGET),
                     @At(ordinal = 17, value = "INVOKE", target = VERTEX_TARGET),
@@ -173,15 +173,15 @@ public abstract class PaintingRendererMixin implements RenderRelightCounter {
                     @At(ordinal = 19, value = "INVOKE", target = VERTEX_TARGET)
             }
     )
-    private boolean preventWestFace(
-            PaintingRenderer instance, PoseStack.Pose pose, VertexConsumer vertexConsumer, float f, float g, float h, float i, float j, int k, int l, int m, int n,
+    private static boolean preventWestFace(
+            PoseStack.Pose pose, VertexConsumer vertexConsumer, float f, float g, float h, float i, float j, int k, int l, int m, int n,
             @Share("isWestEdge") LocalBooleanRef isEdge
     ) {
         return isEdge.get();
     }
 
     @WrapWithCondition(
-            method = "method_72990",
+            method = "lambda$renderPainting$0",
             at = {
                     @At(ordinal = 20, value = "INVOKE", target = VERTEX_TARGET),
                     @At(ordinal = 21, value = "INVOKE", target = VERTEX_TARGET),
@@ -189,24 +189,24 @@ public abstract class PaintingRendererMixin implements RenderRelightCounter {
                     @At(ordinal = 23, value = "INVOKE", target = VERTEX_TARGET)
             }
     )
-    private boolean preventEastFace(
-            PaintingRenderer instance, PoseStack.Pose pose, VertexConsumer vertexConsumer, float f, float g, float h, float i, float j, int k, int l, int m, int n,
+    private static boolean preventEastFace(
+            PoseStack.Pose pose, VertexConsumer vertexConsumer, float f, float g, float h, float i, float j, int k, int l, int m, int n,
             @Share("isEastEdge") LocalBooleanRef isEdge
     ) {
         return isEdge.get();
     }
 
     @Redirect(
-            method = "method_72990",
+            method = "lambda$renderPainting$0",
             at = @At(value = "INVOKE", target = VERTEX_TARGET)
     )
-    private void vertexWithSmoothLight(
-            PaintingRenderer instance, PoseStack.Pose pose, VertexConsumer vertexConsumer, float f, float g, float h, float i, float j, int k, int l, int m, int n,
+    private static void vertexWithSmoothLight(
+            PoseStack.Pose pose, VertexConsumer vertexConsumer, float f, float g, float h, float i, float j, int k, int l, int m, int n,
             @Local(ordinal = 0, argsOnly = true) int[] lightCoords,
             @Local(ordinal = 0, argsOnly = true) int pWidth,
             @Local(ordinal = 1, argsOnly = true) int pHeight
     ) {
-        if (Minecraft.useAmbientOcclusion()) {
+        if (Minecraft.getInstance().options.ambientOcclusion().get()) {
             int packedVertPos = (int)((g + (float) pHeight / 2.0f) * (pWidth+1) + (f + (float) pWidth / 2.0f));
             n = lightCoords[packedVertPos];
         }
